@@ -303,9 +303,10 @@ SCREEN_FADE_SPEED = 10
 
 FADE_SPEED = 10
 
-TYPE_SPEED = 0.7
-POP_HEIGHT = 10
-POP_LENGTH = 6
+TYPE_SPEED = 0.5
+POP_LENGTH = 2
+POP_FADE = 0.6
+LINE_HEIGHT = 32
 
 # A black picture that covers the whole window.
 # We make it see-through (alpha) to fade the screen.
@@ -624,52 +625,37 @@ def wrap_text(text, font, max_width):
     lines.append(current)                     # save the last line
     return lines
 
-
 def draw_typed_text(text, font, color, x, y, max_width, chars_shown, alpha):
-    """Draw the story text one letter at a time (cute typing).
+    """Draw the story text one letter at a time.
 
-    chars_shown = the typing counter.
-
-    Each NEW letter:
-      - hops up a little, then drops into its place
-      - fades in softly while it hops
-    Letters that are finished stay completely still.
-
-    IMPORTANT: the counter keeps growing a little after the
-    last letter appears (POP_LENGTH extra steps). This gives
-    the last letters time to finish their hop and settle.
+    Letters do not move at all. Each new letter fades in
+    where it belongs, then stays still.
     """
     lines = wrap_text(text, font, max_width)
-    count = 0                                 # how many letters we have passed so far
+    count = 0   # how many letters we have passed
 
     for line in lines:
         for i, letter in enumerate(line):
 
-            # Stop when we reach the letters that are not typed yet
+            # Stop at letters that are not typed yet
             if count >= chars_shown:
                 return
 
             if letter != " ":
-                # How many steps ago did this letter appear?
-                # A small age means this letter just appeared.
+                # fade: 0 = just appeared, 1 = finished
                 age = chars_shown - count
-
-                # pop goes from 1 (just appeared) down to 0 (finished).
-                # When pop is 0, the letter does not move at all.
-                pop = max(0.0, 1 - age / POP_LENGTH)
-
-                hop = -POP_HEIGHT * pop                        # moves the new letter up
-                letter_alpha = int(alpha * (1 - pop * 0.6))    # new letters are lighter
+                progress = min(1.0, age / POP_LENGTH)
+                letter_alpha = int(alpha * (1 - (1 - progress) * POP_FADE))
 
                 image = font.render(letter, True, color)
                 image.set_alpha(letter_alpha)
-                letter_x = x + font.size(line[:i])[0]          # where this letter starts
-                screen.blit(image, (int(letter_x), int(y + hop)))
+
+                letter_x = x + font.size(line[:i])[0]   # where this letter starts
+                screen.blit(image, (int(letter_x), int(y)))
 
             count += 1
 
-        y += 32   # move down for the next line
-
+        y += LINE_HEIGHT
 
 def draw_menu(mouse_pos):
     """Draw the main menu."""
