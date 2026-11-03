@@ -27,7 +27,7 @@ SLICE/
 │
 ├── screens/                 # One file per screen (there is no __init__.py; Python finds the package automatically).
 │   ├── menu.py              #   MenuScene (main menu) + GateScene (gate cutscene).
-│   ├── gate_light.py        #   GateLight: the little wandering light, its trail and dust particles.
+│   ├── gate_light.py        #   GateLight: the little wandering light, its trail, and the cover particles.
 │   ├── introduction.py      #   IntroScene: opening story with typewriter dialogue.
 │   ├── characters.py        #   CharacterScene: placeholder character-selection page.
 │   ├── info.py              #   InfoScene: generic text page used for Continue / Settings / About.
@@ -90,7 +90,7 @@ python main.py
    `MenuScene.draw_gate()`. Phases (all timings in settings.py): the
    `GateLight` prelude (appear → float → dart into the arch), door swing +
    camera zoom (`compose_scene` + `draw_camera`), then an expanding light mass
-   until `GATE_ANIMATION_TIME`, when it calls
+   and its particle cover until `GATE_ANIMATION_TIME`, when it calls
    `show_scene("intro", white_fade=True)`. Click / Space / Enter skips it.
 
 6. **Story.** `IntroScene` (screens/introduction.py) types out lines from
@@ -168,8 +168,9 @@ to be created when that stage begins (see section 4).
 
 ### `screens/gate_light.py` — class `GateLight` + helpers
 - **Responsibility:** the small light in the cutscene prelude: kindle →
-  wander → dive, with a fading trail and dust motes. Position is *analytic* —
-  computed from the cutscene clock, not accumulated per frame.
+  wander → dive, with a fading trail. Position is *analytic* —
+  computed from the cutscene clock, not accumulated per frame. Its particle
+  pool is the final cover only: it stays empty until the gate light expands.
 - **Key functions:** `make_glow` / `make_streak` (soft light sprites),
   `reset` (rebuilds seeded sine path), `wander` (sine path position),
   `update` (phase switching + particles), `draw`.

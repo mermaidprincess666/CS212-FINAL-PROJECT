@@ -19,11 +19,13 @@ from settings import (
     GATE_LIGHT_HALO_COLOR,
     GATE_LIGHT_HALO_RADIUS,
     GATE_LIGHT_MID_COLOR,
+    GATE_PARTICLE_BURST_ACCEL,
+    GATE_PARTICLE_BURST_RATE,
+    GATE_PARTICLE_BURST_SPEED,
     GATE_PARTICLE_CAP,
-    GATE_PARTICLE_DART_RATE,
-    GATE_PARTICLE_FLOAT_RATE,
     GATE_PARTICLE_LIFE,
     GATE_LIGHT_PRELUDE_TIME,
+    GATE_LIGHT_START_RADIUS,
     GATE_LIGHT_WANDER_AMPLITUDE,
     GATE_LIGHT_WANDER_DRIFT,
     GATE_LIGHT_WANDER_OFFSET,
@@ -78,9 +80,10 @@ class GateLight:
     """A tiny golden light: it appears, drifts peacefully, then dives in.
 
     The path is analytic, so the light is positioned from the animation
-    clock rather than accumulated per frame. Only the dust motes keep
+    clock rather than accumulated per frame. Only the cover motes keep
     their own state, which is why ``update`` takes both a delta time and
-    the absolute clock of the cutscene.
+    the absolute clock of the cutscene. They are the one particle system in
+    the transition, and they stay asleep until the gate's light expands.
     """
 
     def __init__(self, seed=20261103):
@@ -99,9 +102,13 @@ class GateLight:
                 self._faded(make_glow(size, color), alpha)
                 for alpha in DUST_ALPHAS
             ]
+            # The warm, wide kinds are what read against the ivory cover; the
+            # small pale ones keep the spray from looking uniform.
             for size, color in (
                 (10, GATE_LIGHT_MID_COLOR),
                 (8, GATE_LIGHT_AURA_COLOR),
+                (18, GATE_LIGHT_AURA_COLOR),
+                (28, GATE_LIGHT_HALO_COLOR),
             )
         ]
         self.trail = deque(maxlen=GATE_TRAIL_SAMPLES)
@@ -121,10 +128,12 @@ class GateLight:
         return copy
 
     def reset(self):
-        """Start the prelude again, rebuilding the wandering path and motes.
+        """Start the prelude again, rebuilding the wandering path.
 
-        The waves come from a seeded generator, so the light follows the same
-        route on every replay instead of drifting differently each time.
+        Any motes left from the last replay are dropped here, so a restart
+        never carries light into the next cutscene. The waves come from a
+        seeded generator, so the light follows the same route on every replay
+        instead of drifting differently each time.
         """
         rng = random.Random(self.seed)
         span = GATE_LIGHT_FLOAT_TIME
@@ -176,15 +185,22 @@ class GateLight:
             + drift_y * progress,
         )
 
-    def update(self, delta_time, clock, gate_pos):
-        """Move the light along its phases for the given cutscene clock."""
+    def update(self, delta_time, clock, gate_pos, expansion=0.0):
+        """Move the light along its phases for the given cutscene clock.
+
+        ``expansion`` is how far the gate's own light has progressed into
+        covering the screen, and it is what arms the particles: nothing is
+        spawned while the menu fades out, while the doors swing, or while the
+        camera pushes in.
+        """
         if clock >= GATE_LIGHT_PRELUDE_TIME:
-            # The gate's own light takes over from here; only the motes the
-            # dive left behind stay, so the handover has no hard cut.
+            # The gate's own light takes over from here: no trail, and the
+            # motes only wake once that light starts to expand.
             self.phase = PHASE_SPENT
             self.pos = gate_pos
             self.brightness = 1.0
             self.trail.clear()
+            self._emit_cover(delta_time, gate_pos, expansion)
             self._update_particles(delta_time)
             return
 
@@ -220,31 +236,47 @@ class GateLight:
             self.brightness = 0.85 + 0.55 * progress
             self.trail.append(self.pos)
 
-        # Motes are spawned on an average rate, so the leftover fraction carries
-        # into the next frame instead of being dropped.
-        rate = (
-            GATE_PARTICLE_DART_RATE
-            if self.phase == PHASE_DART
-            else GATE_PARTICLE_FLOAT_RATE
+    def _emit_cover(self, delta_time, arch, expansion):
+        """Feed the final particle transition, and only that transition.
+
+        The pool is emptied whenever the light has not started to expand yet,
+        so no mote from an earlier phase or an abandoned replay can carry into
+        the burst. The rate thickens with ``expansion``, so the cloud gathers
+        as the light swells rather than arriving all at once.
+        """
+        if expansion <= 0.0:
+            self.particles.clear()
+            self._spawn_left = 0.0
+            return
+
+        # Motes are spawned on an average rate, so the leftover fraction
+        # carries into the next frame instead of being dropped.
+        self._spawn_left += (
+            GATE_PARTICLE_BURST_RATE * (0.25 + 0.75 * expansion) * delta_time
         )
-        self._spawn_left += rate * delta_time
         while self._spawn_left >= 1.0:
             self._spawn_left -= 1.0
-            self._spawn_particle()
-        self._update_particles(delta_time)
+            if len(self.particles) >= GATE_PARTICLE_CAP:
+                self._spawn_left = 0.0
+                break
+            self._spawn_cover_particle(arch, expansion)
 
-    def _spawn_particle(self):
-        """Release one dust mote where the light currently is."""
-        if len(self.particles) >= GATE_PARTICLE_CAP:
-            return
+    def _spawn_cover_particle(self, arch, expansion):
+        """Send one mote out of the arch, fanning in a random direction."""
         rng = self._rng
+        angle = rng.uniform(0.0, math.tau)
+        # Start inside the ignition glow, so nothing pops in on its edge.
+        offset = rng.uniform(0.0, GATE_LIGHT_START_RADIUS * 0.4)
+        # The first motes out are the fastest runners: they have the least
+        # time left to cross the screen, so they must not start slow.
+        speed = rng.uniform(*GATE_PARTICLE_BURST_SPEED) * (0.7 + 0.3 * expansion)
         life = GATE_PARTICLE_LIFE * rng.uniform(0.55, 1.0)
         self.particles.append(
             {
-                "x": self.pos[0] + rng.uniform(-5.0, 5.0),
-                "y": self.pos[1] + rng.uniform(-5.0, 5.0),
-                "vx": rng.uniform(-11.0, 11.0),
-                "vy": rng.uniform(-17.0, -3.0),
+                "x": arch[0] + math.cos(angle) * offset,
+                "y": arch[1] + math.sin(angle) * offset,
+                "vx": math.cos(angle) * speed,
+                "vy": math.sin(angle) * speed,
                 "life": life,
                 "max": life,
                 "kind": rng.randrange(len(self.dust_sprites)),
@@ -252,19 +284,24 @@ class GateLight:
         )
 
     def _update_particles(self, delta_time):
-        """Drift the motes and drop the ones that have faded out."""
+        """Fan the motes outward and drop the ones that have faded out."""
         if not self.particles:
             return
-        drag = 1.0 - min(1.0, 1.2 * delta_time)
+        # A constant fractional gain is exact exponential growth, so a mote
+        # covers the same ground whether the frame rate is 30 or 240.
+        gain = math.exp(GATE_PARTICLE_BURST_ACCEL * delta_time)
+        # Displacement is integrated over the acceleration, not stepped at the
+        # frame's starting speed, which is the other half of that accuracy.
+        travel = (gain - 1.0) / GATE_PARTICLE_BURST_ACCEL
         alive = []
         for particle in self.particles:
             particle["life"] -= delta_time
             if particle["life"] <= 0.0:
                 continue
-            particle["x"] += particle["vx"] * delta_time
-            particle["y"] += particle["vy"] * delta_time
-            particle["vx"] *= drag
-            particle["vy"] += 7.0 * delta_time
+            particle["x"] += particle["vx"] * travel
+            particle["y"] += particle["vy"] * travel
+            particle["vx"] *= gain
+            particle["vy"] *= gain
             alive.append(particle)
         self.particles = alive
 

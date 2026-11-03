@@ -15,10 +15,13 @@ from screens import gate_light
 from screens.introduction import INTRO_DIALOGUE
 from settings import (
     GATE_ANIMATION_TIME,
+    GATE_FADE_START,
     GATE_LIGHT_APPEAR_TIME,
     GATE_LIGHT_DART_TIME,
     GATE_LIGHT_FLOAT_TIME,
     GATE_LIGHT_PRELUDE_TIME,
+    GATE_LIGHT_START_RADIUS,
+    GATE_TOTAL_TIME,
     HEIGHT,
     POP_LENGTH,
     WIDTH,
@@ -111,7 +114,7 @@ class SceneFlowTests(unittest.TestCase):
 
         # Mid-wander the light is alive, inside the frame, and away from the gate.
         self.assertEqual(light.phase, gate_light.PHASE_FLOAT)
-        self.assertTrue(light.particles)
+        self.assertFalse(light.particles)
         x, y = light.pos
         self.assertTrue(0 < x < WIDTH and 0 < y < HEIGHT)
         self.assertGreater(math.dist(light.pos, arch), 40)
@@ -123,6 +126,37 @@ class SceneFlowTests(unittest.TestCase):
         self.assertEqual(light.phase, gate_light.PHASE_DART)
         self.assertLess(math.dist(light.pos, arch), 25.0)
         self.assertTrue(light.trail)
+
+    def test_particles_are_held_until_the_final_cover(self):
+        menu = self.game.scene_manager.scenes["menu"]
+        gate = self.game.scene_manager.scenes["gate"]
+        light = menu.gate_light
+
+        gate.restart()
+
+        def step_to(seconds):
+            """Run the cutscene at 60 fps until the clock reaches ``seconds``."""
+            while gate.elapsed < seconds:
+                gate.update(1 / 60)
+                menu.draw_gate(self.game.screen, gate.elapsed, 1 / 60)
+
+        # Menu fade-out, the dive, and the ignition half of the door swing.
+        step_to(GATE_LIGHT_PRELUDE_TIME + GATE_FADE_START * 0.5)
+        self.assertEqual(light.phase, gate_light.PHASE_SPENT)
+        self.assertFalse(light.particles)
+
+        # Halfway through the cover the motes are alive and fanning outward.
+        cover = GATE_LIGHT_PRELUDE_TIME + GATE_FADE_START
+        cover += (GATE_TOTAL_TIME - GATE_FADE_START) * 0.5
+        step_to(cover)
+
+        self.assertTrue(light.particles)
+        arch = light.pos
+        reach = max(
+            math.dist((particle["x"], particle["y"]), arch)
+            for particle in light.particles
+        )
+        self.assertGreater(reach, GATE_LIGHT_START_RADIUS)
 
     def test_gate_keyboard_skip_uses_the_black_fade(self):
         manager = self.game.scene_manager

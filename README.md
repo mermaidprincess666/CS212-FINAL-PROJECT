@@ -42,7 +42,7 @@ core/
 	asset_loader.py       Cached image loading with helpful missing-file errors
 screens/
 	menu.py               Main menu and animated gate transition
-	gate_light.py         The wandering light and its dust motes
+	gate_light.py         The wandering light and the final cover particles
 	introduction.py       Opening story, dialogue typing, and story drawing
 	characters.py         Current character-selection placeholder
 	info.py               Shared Continue, Settings, and About screens

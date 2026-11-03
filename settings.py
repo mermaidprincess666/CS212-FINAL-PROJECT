@@ -108,9 +108,13 @@ GATE_LIGHT_WANDER_SECONDARY = (42, 22)    # px added on a faster sine
 GATE_LIGHT_WANDER_DRIFT = (26, -18)       # px walked across the whole float
 GATE_LIGHT_DART_ARC = 46  # px the dive bows sideways instead of running straight
 GATE_TRAIL_SAMPLES = 18   # positions kept behind the diving light
-GATE_PARTICLE_CAP = 26    # dust motes alive at once
-GATE_PARTICLE_FLOAT_RATE = 9.0   # motes shed per second while wandering
-GATE_PARTICLE_DART_RATE = 46.0   # motes shed per second during the dive
+# The light itself sheds no dust while it wanders and dives. The pool below is
+# only for the final cover: the motes fan out of the arch once the light starts
+# expanding, and nothing is drawn before that.
+GATE_PARTICLE_CAP = 160            # cover motes alive at once
+GATE_PARTICLE_BURST_RATE = 420.0   # motes shed per second at full expansion
+GATE_PARTICLE_BURST_SPEED = (520.0, 1150.0)  # px/s outward speeds at spawn
+GATE_PARTICLE_BURST_ACCEL = 3.6    # per second: cover motes keep gaining speed
 GATE_PARTICLE_LIFE = 1.1  # seconds; each mote draws a share of this on spawn
 # The warm-white flash at the moment the light reaches the arch.
 GATE_FLASH_TIME = 0.45

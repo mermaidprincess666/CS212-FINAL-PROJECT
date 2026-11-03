@@ -349,8 +349,11 @@ class MenuScene:
         scene stays closed and still while this happens.
         Ignition: the light that entered the arch brightens and flashes warm
         white, while the doors begin to swing and the camera starts its zoom.
+        Nothing but the gate artwork and its own glow is on screen here; the
+        particle pool stays empty through the menu fade-out and the swing.
         Expansion: the light swells outward from the arch until it reaches
-        every corner, blending into the ivory overlay underneath.
+        every corner, blending into the ivory overlay underneath. This is the
+        only stage that draws particles, and it starts them from a clean pool.
 
         The handover is not done here. Once the haze fully covers the last
         frame, GateScene switches to the story and the scene manager fades the
@@ -429,8 +432,10 @@ class MenuScene:
             target.blit(self.game.warm_surface, (0, 0))
 
         # The wandering light sits on top of the still entrance, and dives
-        # into the exact point the camera is framing the arch at.
-        self.gate_light.update(delta_time, elapsed, arch)
+        # into the exact point the camera is framing the arch at. It also
+        # runs the particles, but holds them until ``light`` leaves zero, so
+        # the fade-out, the door swing and the camera drift stay particle-free.
+        self.gate_light.update(delta_time, elapsed, arch, light)
         self.gate_light.draw(target)
 
         # The arrival: one brief warm-white flash as the light enters, which
