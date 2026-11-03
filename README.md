@@ -8,6 +8,10 @@ The restaurant gameplay is not implemented yet. There is no `game/` or
 `systems/` package yet; player movement, customers, orders, baking, and serving
 will be added when that work starts.
 
+New contributors should read
+[docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) — it maps every file,
+explains the game flow, and shows where to make each kind of change.
+
 ## Install and Run
 
 Use Python 3 and install the project dependency:
