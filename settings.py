@@ -120,8 +120,10 @@ GATE_PARTICLE_LIFE = 1.1  # seconds; each mote draws a share of this on spawn
 GATE_FLASH_TIME = 0.45
 GATE_FLASH_ALPHA = 215
 
-# Full length of the menu-to-story cutscene, prelude included.
-GATE_ANIMATION_TIME = GATE_LIGHT_PRELUDE_TIME + GATE_TOTAL_TIME
+# Run long enough for the doors, camera, and fade to finish.
+GATE_ANIMATION_TIME = max(
+    GATE_OPEN_DELAY + GATE_OPEN_TIME, GATE_ZOOM_TIME, GATE_TOTAL_TIME
+)
 
 PROJECT_DIR = Path(__file__).resolve().parent
-ASSETS_DIR = PROJECT_DIR / "assets"
+ASSETS_DIR = PROJECT_DIR / "ASSET"

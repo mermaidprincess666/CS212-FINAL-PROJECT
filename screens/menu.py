@@ -1,12 +1,10 @@
 """Main menu and the gate-opening transition animation."""
 
 import math
-import random
 
 import pygame
 
 from screens.common import draw_button, draw_text_center, ease
-from screens.gate_light import make_glow, GateLight
 from settings import (
     BUTTON_GAP,
     BUTTON_HEIGHT,
@@ -15,24 +13,14 @@ from settings import (
     BUTTON_X,
     CREAM,
     GATE_ANIMATION_TIME,
-    GATE_BLOOM,
     GATE_FADE_START,
-    GATE_FLASH_ALPHA,
-    GATE_FLASH_TIME,
     GATE_FOCUS,
-    GATE_GLOW_SOURCE,
-    GATE_HIGHLIGHT_COLOR,
-    GATE_LIGHT_PRELUDE_TIME,
-    GATE_LIGHT_START_RADIUS,
-    GATE_LIGHT_COVER_FRACTION,
-    GATE_LIGHT_FINGERS,
     GATE_OPEN_AMOUNT,
     GATE_OPEN_DELAY,
     GATE_OPEN_TIME,
     GATE_TOTAL_TIME,
     GATE_ZOOM_END,
     GATE_ZOOM_TIME,
-    GATE_GLOW_COLOR,
     HEIGHT,
     MENU_UI_FADE,
     MENU_UI_SLIDE,
@@ -49,9 +37,6 @@ from settings import (
 
 
 MENU_BUTTON_NAMES = ("START GAME", "CONTINUE", "SETTINGS", "ABOUT US", "EXIT")
-
-GATE_FLASH_DIAMETER = 900
-
 
 class MenuScene:
     """Draw and handle the main menu and its gate artwork."""
@@ -81,90 +66,13 @@ class MenuScene:
         self._camera_key = None
         self._camera_frame = None
         self._load_gate_artwork()
-        self.gate_glow = self._make_gate_glow()
-        self.light_fingers = self._make_light_fingers()
-        self.gate_flash = make_glow(GATE_FLASH_DIAMETER, GATE_HIGHLIGHT_COLOR, 0.25)
-        self.gate_light = GateLight()
-
-    @staticmethod
-    def _feather(size, color):
-        """A soft round of light: solid in the middle, fading to nothing.
-
-        The same shape as ``gate_light.make_glow`` with its solid core fixed
-        at 0.35, which is what these menu masses want.
-        """
-        surf = pygame.Surface((size, size), pygame.SRCALPHA)
-        centre = size // 2
-        steps = 32
-        for index in range(steps, 0, -1):
-            ring = max(1, round(centre * index / steps))
-            fraction = index / steps
-            if fraction <= 0.35:
-                alpha = 255
-            else:
-                alpha = int(255 * ((1 - fraction) / 0.65) ** 2)
-            pygame.draw.circle(surf, (*color, alpha), (centre, centre), ring)
-        return surf
-
-    def _make_gate_glow(self):
-        """Pre-render the shapeless light mass that grows out of the gate.
-
-        It is a union of overlapping soft rounds, so its outline stays
-        irregular at every size and never reads as a circle. Built once at
-        a modest source size: resampling a smaller texture is several times
-        cheaper per frame and the mass is soft enough not to lose anything.
-        """
-        radius = int(math.hypot(WIDTH, HEIGHT) * 0.8)
-        self.gate_glow_radius = radius
-        rng = random.Random(20261103)
-        glow = self._feather(96, GATE_GLOW_COLOR)
-        highlight = self._feather(56, GATE_HIGHLIGHT_COLOR)
-        base = pygame.Surface((160, 160), pygame.SRCALPHA)
-        for _ in range(12):
-            piece = highlight if rng.random() < 0.4 else glow
-            size = round(rng.uniform(0.4, 1.0) * piece.get_width())
-            if size != piece.get_width():
-                piece = pygame.transform.smoothscale(piece, (size, size))
-            x = rng.uniform(0.0, 160 - size)
-            y = rng.uniform(0.0, 160 - size)
-            base.blit(piece, (round(x), round(y)))
-        return pygame.transform.smoothscale(base, (GATE_GLOW_SOURCE, GATE_GLOW_SOURCE))
-
-    def _make_light_fingers(self):
-        """Small irregular clouds that will stream out of the gate.
-
-        Each finger stores (image, angle, reach, delay): evenly spaced but
-        jittered directions, how far it travels (as a fraction of the
-        corner distance) and when it starts moving during the expansion.
-        """
-        rng = random.Random(31415)
-        template = self._feather(48, GATE_GLOW_COLOR)
-        core = self._feather(30, GATE_HIGHLIGHT_COLOR)
-        fingers = []
-        for index in range(GATE_LIGHT_FINGERS):
-            base = pygame.Surface((96, 96), pygame.SRCALPHA)
-            for _ in range(5):
-                piece = core if rng.random() < 0.25 else template
-                size = round(rng.uniform(0.35, 0.95) * piece.get_width())
-                if size != piece.get_width():
-                    piece = pygame.transform.smoothscale(piece, (size, size))
-                x = rng.uniform(0.0, 96 - size)
-                y = rng.uniform(0.0, 96 - size)
-                base.blit(piece, (round(x), round(y)))
-            diameter = round(self.gate_glow_radius * rng.uniform(0.18, 0.34))
-            image = pygame.transform.smoothscale(base, (diameter, diameter))
-            angle = index / GATE_LIGHT_FINGERS * math.tau + rng.uniform(-0.45, 0.45)
-            fingers.append(
-                (image, angle, rng.uniform(0.15, 0.45), rng.uniform(0.0, 0.3))
-            )
-        return fingers
 
     def _load_gate_artwork(self):
         """Load the four gate images and prepare the still menu background."""
         self.gate_bg = self.game.assets.load_image("BG.png", (SRC_W, SRC_H))
-        self.gate_frame = self.game.assets.load_image("gate_fence.png", (SRC_W, SRC_H))
-        left_full = self.game.assets.load_image("left_gate.png", (SRC_W, SRC_H))
-        right_full = self.game.assets.load_image("right_gate.png", (SRC_W, SRC_H))
+        self.gate_frame = self.game.assets.load_image("gate fence.png", (SRC_W, SRC_H))
+        left_full = self.game.assets.load_image("left gate.png", (SRC_W, SRC_H))
+        right_full = self.game.assets.load_image("right gate.png", (SRC_W, SRC_H))
 
         self.left_rect = left_full.get_bounding_rect()
         self.right_rect = right_full.get_bounding_rect()
@@ -326,44 +234,13 @@ class MenuScene:
         )
         return ((GATE_FOCUS[0] - view_x) * scale, (GATE_FOCUS[1] - view_y) * scale)
 
-    def _cover_radius(self, x, y):
-        """Distance from the arch to the farthest corner of the screen."""
-        return max(
-            math.hypot(x - corner_x, y - corner_y)
-            for corner_x, corner_y in (
-                (0, 0),
-                (WIDTH, 0),
-                (0, HEIGHT),
-                (WIDTH, HEIGHT),
-            )
-        )
-
-    def draw_gate(self, target, elapsed, delta_time):
-        """Draw one frame of the menu-to-story cutscene.
-
-        Phases, all read off ``elapsed`` since the START GAME click:
-
-        Prelude (the first GATE_LIGHT_PRELUDE_TIME seconds): a small warm
-        light kindles near the university entrance, wanders peacefully over
-        the fence, then accelerates into the center of the gate opening. The
-        scene stays closed and still while this happens.
-        Ignition: the light that entered the arch brightens and flashes warm
-        white, while the doors begin to swing and the camera starts its zoom.
-        Nothing but the gate artwork and its own glow is on screen here; the
-        particle pool stays empty through the menu fade-out and the swing.
-        Expansion: the light swells outward from the arch until it reaches
-        every corner, blending into the ivory overlay underneath. This is the
-        only stage that draws particles, and it starts them from a clean pool.
-
-        The handover is not done here. Once the haze fully covers the last
-        frame, GateScene switches to the story and the scene manager fades the
-        overlay out over WHITE_IN_TIME to reveal it.
-        """
-        gate_elapsed = max(0.0, elapsed - GATE_LIGHT_PRELUDE_TIME)
+    def draw_gate(self, target, elapsed):
+        """Draw the doors opening, then fade to the story scene."""
+        gate_elapsed = elapsed
 
         open_amount = (gate_elapsed - GATE_OPEN_DELAY) / GATE_OPEN_TIME
         self.compose_scene(open_amount)
-        arch = self.draw_camera(target, ease(gate_elapsed / GATE_ZOOM_TIME))
+        self.draw_camera(target, ease(gate_elapsed / GATE_ZOOM_TIME))
 
         ui_progress = ease(elapsed / MENU_UI_FADE)
         self.draw_menu_ui(
@@ -373,80 +250,9 @@ class MenuScene:
             MENU_UI_SLIDE * ui_progress,
         )
 
-        cover = self._cover_radius(*arch)
-        if gate_elapsed < GATE_FADE_START:
-            # Ignition: a small irregular light brightens at the center of the
-            # gate while the scene around it stays visible.
-            ignition = ease(gate_elapsed / GATE_FADE_START)
-            radius = GATE_LIGHT_START_RADIUS * (0.7 + 0.3 * ignition)
-            glow_alpha = int(GATE_BLOOM * ignition)
-            light = 0.0
-            overlay = 0.0
-        else:
-            # Expansion: the light mass grows from the arch, streams of soft
-            # light race outward in several directions, and the whole thing
-            # dissolves into a warm ivory haze that keeps the gate readable
-            # early and fully covers the last frame.
-            light = ease(
-                (gate_elapsed - GATE_FADE_START)
-                / (GATE_TOTAL_TIME - GATE_FADE_START)
-            )
-            # The mass itself stops short of the corners; the ivory haze
-            # finishes the cover. That keeps the biggest per-frame resample
-            # far below full-screen size.
-            reach = cover * GATE_LIGHT_COVER_FRACTION
-            radius = GATE_LIGHT_START_RADIUS + (reach - GATE_LIGHT_START_RADIUS) * light
-            glow_alpha = int(GATE_BLOOM + (255 - GATE_BLOOM) * min(1.0, light * 1.8))
-            overlay = light * light
-
-        # Once the haze is at 90% it leaves only a tenth of the light beneath
-        # it visible, so the last frames skip the resample.
-        if glow_alpha > 0 and overlay < 0.9:
-            # Resampled from one cached source surface per frame, like the
-            # door and camera already do; the size change is the expansion.
-            diameter = max(2, round(radius * 2))
-            mass = pygame.transform.smoothscale(self.gate_glow, (diameter, diameter))
-            mass.set_alpha(glow_alpha)
-            target.blit(
-                mass,
-                (round(arch[0] - radius), round(arch[1] - radius)),
-            )
-
-            # The irregular fingers keep the frontier from ever looking like
-            # an expanding circle. They only move; their images are fixed.
-            for image, angle, reach, delay in self.light_fingers:
-                stream = ease((light - delay) / (1.0 - delay))
-                if stream <= 0.0:
-                    continue
-                distance = cover * reach * stream
-                half = image.get_width() / 2
-                x = arch[0] + math.cos(angle) * distance - half
-                y = arch[1] + math.sin(angle) * distance - half
-                image.set_alpha(int(glow_alpha * (0.5 + 0.5 * stream)))
-                target.blit(image, (round(x), round(y)))
-
-        # Coverage: the overlay reaches full cover exactly at
-        # GATE_TOTAL_TIME, which is when the scene manager hands over.
-        if overlay > 0:
-            self.game.warm_surface.set_alpha(int(255 * overlay))
-            target.blit(self.game.warm_surface, (0, 0))
-
-        # The wandering light sits on top of the still entrance, and dives
-        # into the exact point the camera is framing the arch at. It also
-        # runs the particles, but holds them until ``light`` leaves zero, so
-        # the fade-out, the door swing and the camera drift stay particle-free.
-        self.gate_light.update(delta_time, elapsed, arch, light)
-        self.gate_light.draw(target)
-
-        # The arrival: one brief warm-white flash as the light enters, which
-        # the spreading mass above immediately takes over.
-        arrival = GATE_LIGHT_PRELUDE_TIME
-        if arrival <= elapsed < arrival + GATE_FLASH_TIME:
-            spike = 1.0 - ease((elapsed - arrival) / GATE_FLASH_TIME)
-            half = GATE_FLASH_DIAMETER // 2
-            self.gate_flash.set_alpha(int(GATE_FLASH_ALPHA * spike))
-            target.blit(self.gate_flash, (round(arch[0] - half), round(arch[1] - half)))
-            self.game.warm_surface.set_alpha(int(GATE_FLASH_ALPHA * 0.45 * spike))
+        fade_progress = ease((gate_elapsed - GATE_FADE_START) / (GATE_TOTAL_TIME - GATE_FADE_START))
+        if fade_progress > 0:
+            self.game.warm_surface.set_alpha(round(255 * fade_progress**2))
             target.blit(self.game.warm_surface, (0, 0))
 
 
@@ -463,7 +269,6 @@ class GateScene:
         """Play the animation from the start, armed to hand over once."""
         self.elapsed = 0.0
         self.covered = False
-        self.menu_scene.gate_light.reset()
 
     def handle_event(self, event):
         """A click or Enter/Space skips ahead, fading over to the story."""
@@ -486,4 +291,4 @@ class GateScene:
 
     def draw(self, target, mouse_pos):
         """Draw the current frame of the gate animation."""
-        self.menu_scene.draw_gate(target, self.elapsed, self.game.delta_time)
+        self.menu_scene.draw_gate(target, self.elapsed)

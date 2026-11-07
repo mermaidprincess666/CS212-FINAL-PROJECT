@@ -1,6 +1,5 @@
 """Behavior checks for the menu, gate, and story screens."""
 
-import math
 import os
 import unittest
 
@@ -11,20 +10,12 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 import pygame
 
 from core.game import Game
-from screens import gate_light
 from screens.introduction import INTRO_DIALOGUE
 from settings import (
     GATE_ANIMATION_TIME,
     GATE_FADE_START,
-    GATE_LIGHT_APPEAR_TIME,
-    GATE_LIGHT_DART_TIME,
-    GATE_LIGHT_FLOAT_TIME,
-    GATE_LIGHT_PRELUDE_TIME,
-    GATE_LIGHT_START_RADIUS,
     GATE_TOTAL_TIME,
-    HEIGHT,
     POP_LENGTH,
-    WIDTH,
 )
 
 
@@ -95,68 +86,17 @@ class SceneFlowTests(unittest.TestCase):
         self.assertGreater(manager.white_in_alpha, 0)
         self.assertEqual(manager.scenes["intro"].index, 0)
 
-    def test_gate_light_wanders_then_dives_into_the_arch(self):
+    def test_gate_transition_uses_a_fade_without_particle_effects(self):
         menu = self.game.scene_manager.scenes["menu"]
         gate = self.game.scene_manager.scenes["gate"]
-        light = menu.gate_light
-        arch = menu.draw_camera(self.game.screen, 0.0)
-
         gate.restart()
+        midpoint = GATE_FADE_START + (GATE_TOTAL_TIME - GATE_FADE_START) * 0.5
 
-        def step_to(seconds):
-            """Run the cutscene at 60 fps until the clock reaches ``seconds``."""
-            while gate.elapsed < seconds:
-                gate.update(1 / 60)
-                menu.draw_gate(self.game.screen, gate.elapsed, 1 / 60)
+        menu.draw_gate(self.game.screen, midpoint)
 
-        # Sample in the middle of the float window, never on a phase boundary.
-        step_to(GATE_LIGHT_APPEAR_TIME + GATE_LIGHT_FLOAT_TIME * 0.5)
-
-        # Mid-wander the light is alive, inside the frame, and away from the gate.
-        self.assertEqual(light.phase, gate_light.PHASE_FLOAT)
-        self.assertFalse(light.particles)
-        x, y = light.pos
-        self.assertTrue(0 < x < WIDTH and 0 < y < HEIGHT)
-        self.assertGreater(math.dist(light.pos, arch), 40)
-
-        # Ninety percent along the dive, still before the prelude hands over.
-        step_to(GATE_LIGHT_PRELUDE_TIME - GATE_LIGHT_DART_TIME * 0.1)
-
-        # At the end of the dive it has reached the camera's gate position.
-        self.assertEqual(light.phase, gate_light.PHASE_DART)
-        self.assertLess(math.dist(light.pos, arch), 25.0)
-        self.assertTrue(light.trail)
-
-    def test_particles_are_held_until_the_final_cover(self):
-        menu = self.game.scene_manager.scenes["menu"]
-        gate = self.game.scene_manager.scenes["gate"]
-        light = menu.gate_light
-
-        gate.restart()
-
-        def step_to(seconds):
-            """Run the cutscene at 60 fps until the clock reaches ``seconds``."""
-            while gate.elapsed < seconds:
-                gate.update(1 / 60)
-                menu.draw_gate(self.game.screen, gate.elapsed, 1 / 60)
-
-        # Menu fade-out, the dive, and the ignition half of the door swing.
-        step_to(GATE_LIGHT_PRELUDE_TIME + GATE_FADE_START * 0.5)
-        self.assertEqual(light.phase, gate_light.PHASE_SPENT)
-        self.assertFalse(light.particles)
-
-        # Halfway through the cover the motes are alive and fanning outward.
-        cover = GATE_LIGHT_PRELUDE_TIME + GATE_FADE_START
-        cover += (GATE_TOTAL_TIME - GATE_FADE_START) * 0.5
-        step_to(cover)
-
-        self.assertTrue(light.particles)
-        arch = light.pos
-        reach = max(
-            math.dist((particle["x"], particle["y"]), arch)
-            for particle in light.particles
-        )
-        self.assertGreater(reach, GATE_LIGHT_START_RADIUS)
+        self.assertFalse(hasattr(menu, "gate_light"))
+        self.assertGreater(self.game.warm_surface.get_alpha(), 0)
+        self.assertLess(self.game.warm_surface.get_alpha(), 255)
 
     def test_gate_keyboard_skip_uses_the_black_fade(self):
         manager = self.game.scene_manager
