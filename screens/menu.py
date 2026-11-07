@@ -4,13 +4,8 @@ import math
 
 import pygame
 
-from screens.common import draw_button, draw_text_center, ease
+from screens.common import draw_text_center, ease
 from settings import (
-    BUTTON_GAP,
-    BUTTON_HEIGHT,
-    BUTTON_START_Y,
-    BUTTON_WIDTH,
-    BUTTON_X,
     CREAM,
     GATE_ANIMATION_TIME,
     GATE_FADE_START,
@@ -31,12 +26,16 @@ from settings import (
     TITLE_WIDTH,
     TITLE_X,
     TITLE_Y,
-    WHITE,
     WIDTH,
 )
 
 
-MENU_BUTTON_NAMES = ("START GAME", "CONTINUE", "SETTINGS", "ABOUT US", "EXIT")
+MENU_BUTTONS = (
+    ("START GAME", "start"),
+    ("SETTINGS", "setting"),
+    ("CREDIT", "credit"),
+    ("EXIT", "exit"),
+)
 
 class MenuScene:
     """Draw and handle the main menu and its gate artwork."""
@@ -44,28 +43,57 @@ class MenuScene:
     def __init__(self, game):
         self.game = game
         self.title_font = game.fonts["title"]
-        self.button_font = game.fonts["button"]
         self.label_font = game.fonts["label"]
 
         self.title_area = pygame.Rect(TITLE_X, TITLE_Y, TITLE_WIDTH, TITLE_HEIGHT)
+        self.music_button_rect = pygame.Rect(24, 24, 48, 48)
+        self._music_pressed_until = 0
         self.buttons = []
-        for index, name in enumerate(MENU_BUTTON_NAMES):
-            button_y = BUTTON_START_Y + index * (BUTTON_HEIGHT + BUTTON_GAP)
-            self.buttons.append(
-                (name, pygame.Rect(BUTTON_X, button_y, BUTTON_WIDTH, BUTTON_HEIGHT))
-            )
-
-        panel_height = (
-            len(self.buttons) * (BUTTON_HEIGHT + BUTTON_GAP) - BUTTON_GAP + 44
-        )
-        self.button_panel = pygame.Rect(
-            BUTTON_X - 28, BUTTON_START_Y - 22, BUTTON_WIDTH + 56, panel_height
-        )
         self.ui_layer = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        self._pressed_button = None
+        self._pressed_until = 0
         self._compose_key = None
         self._camera_key = None
         self._camera_frame = None
+        self._load_menu_artwork()
         self._load_gate_artwork()
+
+    def _load_menu_artwork(self):
+        """Load the pizza composition and size its button hitboxes to the art."""
+        source = self.game.assets.load_image(
+            "pizza_menu.png", subdirectory="MENU/BUTTONS"
+        )
+        source_width, source_height = source.get_size()
+        available_size = HEIGHT - TITLE_Y - TITLE_HEIGHT
+        scale = min(WIDTH, available_size) / max(source_width, source_height)
+        art_size = (round(source_width * scale), round(source_height * scale))
+        self.menu_art_rect = pygame.Rect(
+            WIDTH - art_size[0], TITLE_Y + TITLE_HEIGHT, *art_size
+        )
+        self.menu_art = pygame.transform.smoothscale(source, art_size)
+        self.button_art = {}
+
+        scale_x = art_size[0] / source_width
+        scale_y = art_size[1] / source_height
+        for name, filename in MENU_BUTTONS:
+            normal = self.game.assets.load_image(
+                f"{filename}.png", subdirectory="MENU/BUTTONS"
+            )
+            hover = self.game.assets.load_image(
+                f"{filename}_h.png", subdirectory="MENU/BUTTONS"
+            )
+            source_bounds = normal.get_bounding_rect(min_alpha=16)
+            left = round(self.menu_art_rect.x + source_bounds.left * scale_x)
+            top = round(self.menu_art_rect.y + source_bounds.top * scale_y)
+            right = round(self.menu_art_rect.x + source_bounds.right * scale_x)
+            bottom = round(self.menu_art_rect.y + source_bounds.bottom * scale_y)
+            self.buttons.append(
+                (name, pygame.Rect(left, top, right - left, bottom - top))
+            )
+            self.button_art[name] = (
+                pygame.transform.smoothscale(normal, art_size),
+                pygame.transform.smoothscale(hover, art_size),
+            )
 
     def _load_gate_artwork(self):
         """Load the four gate images and prepare the still menu background."""
@@ -76,8 +104,7 @@ class MenuScene:
 
         self.left_rect = left_full.get_bounding_rect()
         self.right_rect = right_full.get_bounding_rect()
-        # Trim each door to its opaque pixels, so swinging it open squashes the
-        # door itself and not the transparent padding around it.
+        # Trim transparent padding so the door itself is squashed.
         self.left_gate = left_full.subsurface(self.left_rect).copy()
         self.right_gate = right_full.subsurface(self.right_rect).copy()
         self.gate_canvas = pygame.Surface((SRC_W, SRC_H)).convert()
@@ -91,19 +118,25 @@ class MenuScene:
         if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
             return
 
+        if self.music_button_rect.collidepoint(event.pos):
+            self.game.menu_music.toggle()
+            self._music_pressed_until = pygame.time.get_ticks() + 110
+            return
+
         for name, rect in self.buttons:
             if not rect.collidepoint(event.pos):
                 continue
 
+            self._pressed_button = name
+            self._pressed_until = pygame.time.get_ticks() + 100
             if name == "START GAME":
                 self.game.scene_manager.set_scene("gate")
             elif name == "EXIT":
                 self.game.running = False
             else:
                 destinations = {
-                    "CONTINUE": "continue",
                     "SETTINGS": "settings",
-                    "ABOUT US": "about",
+                    "CREDIT": "about",
                 }
                 self.game.scene_manager.go_to(destinations[name])
             return
@@ -126,10 +159,7 @@ class MenuScene:
             return
 
         self.ui_layer.fill((0, 0, 0, 0))
-        # CREAM at 170 alpha, so the gate art still reads through the panel.
-        pygame.draw.rect(
-            self.ui_layer, (252, 243, 225, 170), self.button_panel, border_radius=22
-        )
+        self.ui_layer.blit(self.menu_art, self.menu_art_rect)
         pygame.draw.rect(self.ui_layer, CREAM, self.title_area, border_radius=20)
         pygame.draw.rect(
             self.ui_layer, TITLE_COLOR, self.title_area, 4, border_radius=20
@@ -148,12 +178,68 @@ class MenuScene:
             TITLE_COLOR,
             (self.title_area.centerx, self.title_area.centery + 30),
         )
+        self._draw_music_button(mouse_pos)
 
         for name, rect in self.buttons:
-            draw_button(self.ui_layer, rect, name, mouse_pos, self.button_font)
+            hovered = rect.collidepoint(mouse_pos)
+            normal, hover = self.button_art[name]
+            image = hover if hovered else normal
+            if name == self._pressed_button and pygame.time.get_ticks() < self._pressed_until:
+                image_rect = rect.move(-self.menu_art_rect.x, -self.menu_art_rect.y)
+                button_image = image.subsurface(image_rect).copy()
+                pressed_size = (
+                    max(1, round(rect.width * 0.97)),
+                    max(1, round(rect.height * 0.97)),
+                )
+                button_image = pygame.transform.smoothscale(button_image, pressed_size)
+                self.ui_layer.blit(button_image, button_image.get_rect(center=rect.center))
+            else:
+                self.ui_layer.blit(image, self.menu_art_rect)
 
         self.ui_layer.set_alpha(int(255 * alpha))
         target.blit(self.ui_layer, (round(x_offset), 0))
+
+    def _draw_music_button(self, mouse_pos):
+        """Draw a compact speaker toggle in the padded top-left corner."""
+        rect = self.music_button_rect
+        hovered = rect.collidepoint(mouse_pos)
+        pressed = pygame.time.get_ticks() < self._music_pressed_until
+        fill = (235, 220, 195) if hovered else CREAM
+        pygame.draw.rect(self.ui_layer, fill, rect, border_radius=12)
+        pygame.draw.rect(self.ui_layer, TITLE_COLOR, rect, 2, border_radius=12)
+
+        center_x = rect.centerx
+        center_y = rect.centery + int(pressed)
+        speaker = [
+            (center_x - 12, center_y - 5),
+            (center_x - 6, center_y - 5),
+            (center_x + 2, center_y - 11),
+            (center_x + 2, center_y + 11),
+            (center_x - 6, center_y + 5),
+            (center_x - 12, center_y + 5),
+        ]
+        pygame.draw.polygon(self.ui_layer, TITLE_COLOR, speaker)
+
+        if self.game.menu_music.muted:
+            pygame.draw.line(
+                self.ui_layer, TITLE_COLOR,
+                (center_x + 7, center_y - 6), (center_x + 14, center_y + 6), 3,
+            )
+            pygame.draw.line(
+                self.ui_layer, TITLE_COLOR,
+                (center_x + 14, center_y - 6), (center_x + 7, center_y + 6), 3,
+            )
+        else:
+            pygame.draw.arc(
+                self.ui_layer, TITLE_COLOR,
+                pygame.Rect(center_x - 5, center_y - 10, 17, 20),
+                -math.pi / 3, math.pi / 3, 2,
+            )
+            pygame.draw.arc(
+                self.ui_layer, TITLE_COLOR,
+                pygame.Rect(center_x - 7, center_y - 14, 25, 28),
+                -math.pi / 3, math.pi / 3, 2,
+            )
 
     def compose_scene(self, open_amount):
         """Build the gate artwork, with the doors swung open by ``open_amount``.
@@ -219,8 +305,7 @@ class MenuScene:
         crop_height_px = max(1, round(crop_height * scale))
         key = (crop_x, crop_y, crop_width, crop_height, crop_width_px, crop_height_px)
         if key != self._camera_key:
-            # The camera only resamples when its crop or size changes, which
-            # keeps the long still prelude as cheap as a single blit.
+            # Rebuild only when the crop or output size changes.
             self._camera_key = key
             crop = self.gate_canvas.subsurface(
                 pygame.Rect(crop_x, crop_y, crop_width, crop_height)
@@ -284,8 +369,7 @@ class GateScene:
 
         self.elapsed += delta_time
         if self.elapsed >= GATE_ANIMATION_TIME:
-            # The screen is fully covered at this instant; hand over exactly
-            # once and let the overlay fade out over the story.
+            # Hand off once the cover is fully opaque.
             self.covered = True
             self.game.scene_manager.show_scene("intro", white_fade=True)
 

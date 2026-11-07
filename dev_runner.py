@@ -12,7 +12,7 @@ PROJECT_DIR = Path(__file__).resolve().parent
 MAIN_FILE = PROJECT_DIR / "main.py"
 
 print("Starting game...")
-# cwd keeps the child's asset paths relative to the project, not the shell.
+# Run from the project root so relative asset paths resolve.
 process = subprocess.Popen(
     [sys.executable, str(MAIN_FILE)],
     cwd=str(PROJECT_DIR)

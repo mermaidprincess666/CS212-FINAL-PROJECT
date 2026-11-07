@@ -25,7 +25,7 @@ from settings import (
 )
 
 
-# The opening story, one (speaker, line) pair per screen.
+# Each entry is a speaker and dialogue line.
 INTRO_DIALOGUE = [
 	(
 		"Narrator",
@@ -69,13 +69,11 @@ class IntroScene:
 		self.label_font = game.fonts["label"]
 		self.name_font = game.fonts["name"]
 
-		# Fixed story layout: buttons along the bottom, dialogue box above them.
 		self.back_button = pygame.Rect(40, HEIGHT - 60, 140, 40)
 		self.next_button = pygame.Rect(WIDTH - 180, HEIGHT - 60, 140, 40)
 		self.skip_button = pygame.Rect(WIDTH - 340, HEIGHT - 60, 140, 40)
 		self.dialogue_box = pygame.Rect(60, 440, WIDTH - 120, 160)
 		self.name_tag = pygame.Rect(90, 410, 200, 42)
-		# Where the three characters will stand; still empty boxes for now.
 		self.character_boxes = [
 			pygame.Rect(150, 110, 240, 360),
 			pygame.Rect(480, 110, 240, 360),
@@ -114,25 +112,23 @@ class IntroScene:
 
 		if self.back_button.collidepoint(event.pos):
 			if self.index > 0:
-				# Replaying a line is a fade too, so it waits for the last one.
+				# Don't start another fade mid-transition.
 				if self.fade_state == "none":
 					self.pending_index = self.index - 1
 					self.fade_state = "out"
 			else:
-				# Before the opening line there is nothing to go back to.
 				self.game.scene_manager.go_to("menu")
 		elif self.skip_button.collidepoint(event.pos):
 			self.game.scene_manager.go_to("character")
 		elif self.next_button.collidepoint(event.pos) or self.dialogue_box.collidepoint(
 			event.pos
 		):
-			# Clicking anywhere on the box counts as pressing NEXT.
+			# The dialogue box also advances.
 			self.advance_requested = True
 
 	def update(self, delta_time):
 		"""Advance typing and fade between dialogue lines."""
-		# The press is read here, where the line state is settled. It is cleared
-		# first, so a press during any fade is dropped instead of buffered.
+		# Consume each press once; fade-time presses are dropped.
 		advance_requested = self.advance_requested
 		self.advance_requested = False
 		manager = self.game.scene_manager
@@ -143,10 +139,10 @@ class IntroScene:
 		if advance_requested and self.fade_state == "none":
 			typing_end = len(INTRO_DIALOGUE[self.index][1]) + POP_LENGTH
 			if self.characters_shown < typing_end:
-				# Still typing, so this press just finishes the line.
+				# Finish typing before advancing.
 				self.characters_shown = typing_end
 			elif self.index + 1 >= len(INTRO_DIALOGUE):
-				# Finished on the last line, so the story hands over to casting.
+				# The last line leads to character selection.
 				manager.go_to("character")
 			else:
 				self.pending_index = self.index + 1
@@ -165,8 +161,7 @@ class IntroScene:
 				self.text_alpha = 255
 				self.fade_state = "none"
 
-		# Typing pauses while old text fades out and while the gate's white
-		# transition still covers most of the story scene.
+		# Pause typing during fades and the gate reveal.
 		if (
 			self.fade_state != "out"
 			and manager.white_in_alpha < 0.4
@@ -180,7 +175,7 @@ class IntroScene:
 	def draw(self, target, mouse_pos):
 		"""Draw the restaurant backdrop, character placeholders, and dialogue."""
 		speaker, text = INTRO_DIALOGUE[self.index]
-		# The shop interior is still flat rectangles rather than drawn art.
+		# Placeholder restaurant background.
 		target.fill(SCENE_WALL)
 		pygame.draw.rect(target, SCENE_COUNTER, (0, 300, WIDTH, 90))
 		pygame.draw.rect(target, SCENE_FLOOR, (0, 390, WIDTH, HEIGHT - 390))
@@ -232,7 +227,6 @@ class IntroScene:
 		)
 
 		typing_finished = len(text) + POP_LENGTH
-		# The bobbing arrow only appears once the line is fully typed and steady.
 		if self.text_alpha == 255 and self.characters_shown >= typing_finished:
 			bounce = int(4 * math.sin(pygame.time.get_ticks() * 0.008))
 			triangle_x = self.dialogue_box.right - 45
@@ -266,7 +260,7 @@ class IntroScene:
 				if character_index >= self.characters_shown:
 					return
 
-				# Spaces still advance the counter, they just draw nothing.
+				# Spaces count toward the reveal but are not drawn.
 				if letter != " ":
 					age = self.characters_shown - character_index
 					progress = min(1.0, age / POP_LENGTH)

@@ -2,8 +2,9 @@
 
 import os
 import unittest
+from unittest.mock import patch
 
-# SDL dummy drivers, so the suite runs headless on a machine with no display.
+# Use SDL's dummy drivers for headless tests.
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
@@ -32,10 +33,13 @@ class SceneFlowTests(unittest.TestCase):
     def test_menu_buttons_keep_their_destinations(self):
         menu = self.game.scene_manager.scenes["menu"]
         expected_destinations = {
-            "CONTINUE": "continue",
             "SETTINGS": "settings",
-            "ABOUT US": "about",
+            "CREDIT": "about",
         }
+        self.assertEqual(
+            {label for label, _ in menu.buttons},
+            {"START GAME", "SETTINGS", "CREDIT", "EXIT"},
+        )
 
         for label, destination in expected_destinations.items():
             with self.subTest(button=label):
@@ -67,6 +71,42 @@ class SceneFlowTests(unittest.TestCase):
             )
         )
         self.assertFalse(self.game.running)
+
+    def test_menu_music_toggle_and_scene_group(self):
+        manager = self.game.scene_manager
+        music = self.game.menu_music
+        menu = manager.scenes["menu"]
+
+        self.assertEqual(menu.music_button_rect.topleft, (24, 24))
+        self.assertFalse(music.muted)
+
+        with patch.object(pygame.mixer.music, "play") as play, patch.object(
+            pygame.mixer.music, "stop"
+        ) as stop, patch.object(pygame.mixer.music, "set_volume") as set_volume:
+            manager._enter_scene("settings", reset_story=False)
+            manager._enter_scene("about", reset_story=False)
+            play.assert_not_called()
+            stop.assert_not_called()
+
+            click = pygame.event.Event(
+                pygame.MOUSEBUTTONDOWN,
+                button=1,
+                pos=menu.music_button_rect.center,
+            )
+            menu.handle_event(click)
+            self.assertTrue(music.muted)
+            set_volume.assert_called_once_with(0.0)
+
+            menu.handle_event(click)
+            self.assertFalse(music.muted)
+            self.assertEqual(set_volume.call_count, 2)
+            self.assertEqual(set_volume.call_args_list[-1].args, (1.0,))
+            play.assert_not_called()
+
+            manager._enter_scene("gate", reset_story=False)
+            stop.assert_called_once_with()
+            manager._enter_scene("menu", reset_story=False)
+            play.assert_called_once_with(-1)
 
     def test_every_registered_screen_can_draw(self):
         manager = self.game.scene_manager

@@ -36,15 +36,12 @@ from settings import (
 )
 
 
-# Prelude stages, walked in order: kindle, drift, dive, then the gate's own
-# light takes over and this one is spent.
 PHASE_APPEAR = 0
 PHASE_FLOAT = 1
 PHASE_DART = 2
 PHASE_SPENT = 3
 
-# Pre-baked fade steps: one sprite per size/alpha pair, so drawing a mote or a
-# trail streak never has to set an alpha at runtime.
+# Cached alpha variants avoid per-particle alpha updates.
 DUST_ALPHAS = (70, 130, 190, 235, 255)
 TRAIL_SIZES = (34, 28, 22, 17, 13, 9)
 
@@ -102,8 +99,7 @@ class GateLight:
                 self._faded(make_glow(size, color), alpha)
                 for alpha in DUST_ALPHAS
             ]
-            # The warm, wide kinds are what read against the ivory cover; the
-            # small pale ones keep the spray from looking uniform.
+            # Larger warm sprites stand out against the cover.
             for size, color in (
                 (10, GATE_LIGHT_MID_COLOR),
                 (8, GATE_LIGHT_AURA_COLOR),
@@ -137,8 +133,7 @@ class GateLight:
         """
         rng = random.Random(self.seed)
         span = GATE_LIGHT_FLOAT_TIME
-        # (frequency, phase) sine pairs: four shape the path, the fifth is the
-        # brightness pulse used while floating.
+        # Four sine waves shape the path; the fifth controls brightness.
         self._wave = tuple(
             (math.tau * cycles / span, rng.uniform(0.0, math.tau))
             for cycles in (
@@ -194,8 +189,7 @@ class GateLight:
         camera pushes in.
         """
         if clock >= GATE_LIGHT_PRELUDE_TIME:
-            # The gate's own light takes over from here: no trail, and the
-            # motes only wake once that light starts to expand.
+            # The gate glow takes over; particles start during expansion.
             self.phase = PHASE_SPENT
             self.pos = gate_pos
             self.brightness = 1.0
@@ -205,12 +199,10 @@ class GateLight:
             return
 
         if clock < GATE_LIGHT_APPEAR_TIME:
-            # Kindle: fade in while sitting at the start of the wandering path.
             self.phase = PHASE_APPEAR
             self.pos = self.wander(gate_pos, 0.0)
             self.brightness = ease(clock / GATE_LIGHT_APPEAR_TIME)
         elif clock < GATE_LIGHT_APPEAR_TIME + GATE_LIGHT_FLOAT_TIME:
-            # Wander: slow sine drift with a breathing brightness.
             float_time = clock - GATE_LIGHT_APPEAR_TIME
             self.phase = PHASE_FLOAT
             self.pos = self.wander(gate_pos, float_time)
@@ -219,7 +211,6 @@ class GateLight:
                 pulse_frequency * float_time + pulse_phase
             )
         else:
-            # Dive: accelerate into the arch, bowing sideways on the way.
             dart_time = clock - GATE_LIGHT_APPEAR_TIME - GATE_LIGHT_FLOAT_TIME
             progress = clamp(dart_time / GATE_LIGHT_DART_TIME, 0.0, 1.0)
             start = self.wander(gate_pos, GATE_LIGHT_FLOAT_TIME)
@@ -249,8 +240,7 @@ class GateLight:
             self._spawn_left = 0.0
             return
 
-        # Motes are spawned on an average rate, so the leftover fraction
-        # carries into the next frame instead of being dropped.
+        # Carry fractional spawns into the next frame.
         self._spawn_left += (
             GATE_PARTICLE_BURST_RATE * (0.25 + 0.75 * expansion) * delta_time
         )
@@ -265,10 +255,9 @@ class GateLight:
         """Send one mote out of the arch, fanning in a random direction."""
         rng = self._rng
         angle = rng.uniform(0.0, math.tau)
-        # Start inside the ignition glow, so nothing pops in on its edge.
+        # Spawn inside the glow to avoid a visible edge.
         offset = rng.uniform(0.0, GATE_LIGHT_START_RADIUS * 0.4)
-        # The first motes out are the fastest runners: they have the least
-        # time left to cross the screen, so they must not start slow.
+        # Early particles need enough speed to cross the screen.
         speed = rng.uniform(*GATE_PARTICLE_BURST_SPEED) * (0.7 + 0.3 * expansion)
         life = GATE_PARTICLE_LIFE * rng.uniform(0.55, 1.0)
         self.particles.append(
@@ -287,11 +276,9 @@ class GateLight:
         """Fan the motes outward and drop the ones that have faded out."""
         if not self.particles:
             return
-        # A constant fractional gain is exact exponential growth, so a mote
-        # covers the same ground whether the frame rate is 30 or 240.
+        # Exponential velocity growth is frame-rate independent.
         gain = math.exp(GATE_PARTICLE_BURST_ACCEL * delta_time)
-        # Displacement is integrated over the acceleration, not stepped at the
-        # frame's starting speed, which is the other half of that accuracy.
+        # Integrate displacement over the same acceleration interval.
         travel = (gain - 1.0) / GATE_PARTICLE_BURST_ACCEL
         alive = []
         for particle in self.particles:
@@ -324,7 +311,6 @@ class GateLight:
         for particle in self.particles:
             fraction = particle["life"] / particle["max"]
             sprites = self.dust_sprites[particle["kind"]]
-            # The fade is pre-baked into the variants, so no alpha is set here.
             sprite = sprites[min(len(sprites) - 1, int(fraction * len(sprites)))]
             half = sprite.get_width() // 2
             target.blit(
