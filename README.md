@@ -6,7 +6,8 @@ simple Continue, Settings, About, and character-selection screens.
 
 The restaurant gameplay is not implemented yet. There is no `game/` or
 `systems/` package yet; player movement, customers, orders, baking, and serving
-will be added when that work starts.
+will be added when that work starts. Character selection is playable, and the
+chosen character is stored on the game object for future gameplay integration.
 
 New contributors should read
 [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) — it maps every file,
@@ -44,7 +45,8 @@ screens/
 	menu.py               Main menu and animated gate transition
 	gate_light.py         The wandering light and the final cover particles
 	introduction.py       Opening story, dialogue typing, and story drawing
-	characters.py         Current character-selection placeholder
+	characters.py         Character selection, portraits, and selection input
+	character_data.py     Reusable character names, descriptions, and image paths
 	info.py               Shared Continue, Settings, and About screens
 	common.py             Shared text and button drawing helpers
 assets/menu/            Background and gate images used by the menu
@@ -83,6 +85,8 @@ game-loop code separate.
 - The first advance completes the current line if it is still typing. Advance
 	again to move to the next line.
 - Back moves to the previous story line. Skip opens character selection.
+- In character selection, use Left/Right or click a portrait, then press Enter
+	or click CONFIRM. Escape or BACK returns to the story; F11 toggles fullscreen.
 - Escape returns to the menu. Escape on the main menu exits the game.
 
 ## Add a Scene
@@ -97,25 +101,19 @@ game-loop code separate.
 Use `set_scene` only when a transition should happen immediately. For normal
 navigation, use `go_to` so the existing black fade is kept.
 
-## Add a Character or Animation
+## Add Character Artwork
 
-Character and restaurant behavior belongs in a new module under a `game/`
-package rather than in `main.py` or the scene manager. The `game/` package does
-not exist yet; create it along with an `__init__.py` when this work begins. The
-current character screen is only a placeholder, so the first playable character
-will need its own data and behavior before it can be selected in the game.
+Character metadata and image filenames live in
+`screens/character_data.py`. Put each character's transparent PNGs in its own
+folder under `ASSET/MAIN/ANIMAL/`, then add a `CHARACTERS` entry with its
+`folder`, `portrait`, and optional `talking` filenames. The current convention
+uses one idle image and one mouth-open image; missing images fall back to a
+simple placeholder. Artwork is alpha-cropped and proportionally scaled by the
+selection scene.
 
-Put image files in an appropriate folder under `assets/`. Load them through the
-shared loader so each image is cached:
-
-```python
-image = game.assets.load_image("chef.png", subdirectory="characters")
-```
-
-For a simple animation, store the animation's elapsed time in the owning
-character or screen and update it with the `delta_time` passed to `update`.
-Keep the image paths relative to `assets/`; do not repeat absolute paths in
-game code. Missing images raise an error that shows the expected full path.
+The five current folders are `CAT`, `DOG`, `MONKEY`, `CAPYBARA`, and `BUNNY`.
+Keep the `ability` value as `standard` until gameplay abilities are designed;
+all current characters intentionally play the same way.
 
 ## Settings and Current Limits
 
@@ -123,10 +121,8 @@ Change the window size, colors, button placement, FPS target, and gate/dialogue
 timings in the root `settings.py`. The keyboard controls are handled by the
 active screen and `core/scene_manager.py`.
 
-The current assets contain menu artwork only. There are no sound files or
-audio playback calls in the project yet. Continue, Settings, About, and
-character selection are informational placeholders, and there is no playable
-restaurant loop or save system yet.
+There are no sound effects or playable restaurant loop yet. Continue, Settings,
+and About are informational placeholders, and the game has no save system.
 
 Run the automated screen checks with:
 

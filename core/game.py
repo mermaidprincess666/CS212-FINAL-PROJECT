@@ -29,6 +29,7 @@ class Game:
         self.screen = pygame.display.set_mode(
             (WIDTH, HEIGHT), pygame.SCALED, vsync=1
         )
+        self.fullscreen = False
         pygame.display.set_caption(GAME_TITLE)
         self.clock = pygame.time.Clock()
         self.running = True
@@ -48,6 +49,12 @@ class Game:
         self.assets = AssetLoader()
         self.menu_music = MenuMusic()
         self.scene_manager = SceneManager(self)
+
+    def toggle_fullscreen(self):
+        """Switch between the scaled window and scaled fullscreen display."""
+        self.fullscreen = not self.fullscreen
+        flags = pygame.SCALED | (pygame.FULLSCREEN if self.fullscreen else 0)
+        self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags, vsync=1)
 
     def run(self):
         """Run events, updates, and drawing until the player exits."""

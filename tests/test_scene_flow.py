@@ -11,6 +11,8 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 import pygame
 
 from core.game import Game
+from screens.characters import CharacterScene
+from screens.character_data import CHARACTERS
 from screens.introduction import INTRO_DIALOGUE
 from settings import (
     GATE_ANIMATION_TIME,
@@ -113,6 +115,66 @@ class SceneFlowTests(unittest.TestCase):
         for name, scene in manager.scenes.items():
             with self.subTest(screen=name):
                 scene.draw(self.game.screen, (0, 0))
+
+    def test_character_selection_supports_keyboard_and_mouse(self):
+        manager = self.game.scene_manager
+        manager.show_scene("character")
+        scene = manager.scenes["character"]
+
+        manager.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_LEFT))
+        self.assertEqual(scene.selected_index, 4)
+        manager.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RIGHT))
+        self.assertEqual(scene.selected_index, 0)
+
+        monkey_portrait = scene.portrait_rects[2]
+        manager.handle_event(
+            pygame.event.Event(
+                pygame.MOUSEBUTTONDOWN, button=1, pos=monkey_portrait.center
+            )
+        )
+        self.assertEqual(scene.selected_index, 2)
+
+        manager.handle_event(
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+        )
+        self.assertEqual(self.game.selected_character["id"], "monkey")
+        self.assertEqual(self.game.selected_character["ability"], "standard")
+        self.assertEqual({character["ability"] for character in CHARACTERS}, {"standard"})
+
+    def test_character_selection_draws_when_art_is_missing(self):
+        with patch.object(
+            self.game.assets, "load_image", side_effect=FileNotFoundError
+        ):
+            scene = CharacterScene(self.game)
+
+        self.assertIsNone(scene.background)
+        self.assertTrue(all(base is None for base, _, _ in scene.artwork))
+        scene.draw(self.game.screen, (0, 0))
+
+    def test_character_art_layers_keep_the_full_canvas_ratio(self):
+        scene = self.game.scene_manager.scenes["character"]
+
+        for idle, talking, hands in scene._large_surfaces:
+            self.assertEqual(idle.get_size(), (960, 540))
+            self.assertEqual(talking.get_size(), idle.get_size())
+            self.assertEqual(hands.get_size(), idle.get_size())
+
+    def test_character_escape_returns_to_the_intro(self):
+        manager = self.game.scene_manager
+        manager.show_scene("character")
+
+        manager.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE))
+
+        self.assertEqual(manager.next_name, "intro")
+        self.assertEqual(manager.screen_fade_state, "out")
+
+    def test_f11_toggles_scaled_fullscreen_mode(self):
+        manager = self.game.scene_manager
+
+        manager.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F11))
+        self.assertTrue(self.game.fullscreen)
+        manager.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F11))
+        self.assertFalse(self.game.fullscreen)
 
     def test_gate_opens_into_the_intro(self):
         manager = self.game.scene_manager

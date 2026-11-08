@@ -45,11 +45,19 @@ class SceneManager:
 
     def handle_event(self, event):
         """Handle global Escape behavior, then pass input to the active screen."""
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
+            self.game.toggle_fullscreen()
+            return
+
         # Ignore input during transitions.
         if self.screen_fade_state != "none":
             return
 
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+        if (
+            event.type == pygame.KEYDOWN
+            and event.key == pygame.K_ESCAPE
+            and self.current_name != "character"
+        ):
             if self.current_name == "menu":
                 self.game.running = False
             else:
