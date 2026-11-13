@@ -37,6 +37,16 @@ MENU_BUTTONS = (
     ("EXIT", "exit"),
 )
 
+# Layout tuning
+PIZZA_SCALE = 0.8          # smaller = smaller pizza (gives the logo more room)
+PIZZA_MARGIN = 20          # gap from the bottom/right screen edges
+LOGO_WIDTH_FACTOR = 2.4    # logo width relative to the pizza width (bigger = bigger logo)
+LOGO_OVERLAP = 80          # how far the logo dips onto the pizza (bigger = lower, allows a bigger logo)
+LOGO_TOP_MARGIN = 10       # minimum gap from the top of the screen
+LOGO_SIDE_MARGIN = 10      # minimum gap from the left/right of the screen
+CENTER_BIAS = 0.35         # 0 = far right, 1 = exact screen center (title + pizza move together)
+
+
 class MenuScene:
     """Draw and handle the main menu and its gate artwork."""
 
@@ -47,6 +57,8 @@ class MenuScene:
 
         self.title_area = pygame.Rect(TITLE_X, TITLE_Y, TITLE_WIDTH, TITLE_HEIGHT)
         self.music_button_rect = pygame.Rect(24, 24, 48, 48)
+        self.logo_image = None
+        self.logo_rect = pygame.Rect(0, 0, 0, 0)
         self._music_pressed_until = 0
         self.buttons = []
         self.ui_layer = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -59,19 +71,52 @@ class MenuScene:
         self._load_gate_artwork()
 
     def _load_menu_artwork(self):
-        """Load the pizza composition and size its button hitboxes to the art."""
+        """Load the pizza composition and logo, sharing one center line."""
         source = self.game.assets.load_image(
             "pizza_menu.png", subdirectory="MENU/BUTTONS"
         )
+        logo_source = self.game.assets.load_image(
+            "title.png", subdirectory="MENU"
+        )
+
         source_width, source_height = source.get_size()
         available_size = HEIGHT - TITLE_Y - TITLE_HEIGHT
-        scale = min(WIDTH, available_size) / max(source_width, source_height)
+        scale = (
+            min(WIDTH, available_size) / max(source_width, source_height)
+        ) * PIZZA_SCALE
         art_size = (round(source_width * scale), round(source_height * scale))
-        self.menu_art_rect = pygame.Rect(
-            WIDTH - art_size[0], TITLE_Y + TITLE_HEIGHT, *art_size
-        )
         self.menu_art = pygame.transform.smoothscale(source, art_size)
+        self.menu_art_rect = pygame.Rect(0, 0, *art_size)
+        self.menu_art_rect.bottom = HEIGHT - PIZZA_MARGIN
         self.button_art = {}
+
+        # Logo size: as big as requested, limited by screen width and the
+        # space above the pizza.
+        logo_width = round(art_size[0] * LOGO_WIDTH_FACTOR)
+        logo_width = min(logo_width, WIDTH - 2 * LOGO_SIDE_MARGIN)
+        logo_height = round(
+            logo_source.get_height() * logo_width / logo_source.get_width()
+        )
+        max_height = self.menu_art_rect.top + LOGO_OVERLAP - LOGO_TOP_MARGIN
+        if logo_height > max_height > 0:
+            shrink = max_height / logo_height
+            logo_width = max(1, round(logo_width * shrink))
+            logo_height = max(1, round(logo_height * shrink))
+        self.logo_image = pygame.transform.smoothscale(
+            logo_source, (logo_width, logo_height)
+        )
+
+        # Shared center line: starts at the right edge position, then moves
+        # part of the way toward the screen center, and stays on screen.
+        right_x = WIDTH - PIZZA_MARGIN - art_size[0] // 2
+        center_x = round(right_x + (WIDTH / 2 - right_x) * CENTER_BIAS)
+        half_logo = logo_width // 2 + LOGO_SIDE_MARGIN
+        center_x = max(half_logo, min(center_x, WIDTH - half_logo))
+
+        self.menu_art_rect.centerx = center_x
+        self.logo_rect = self.logo_image.get_rect(
+            midbottom=(center_x, self.menu_art_rect.top + LOGO_OVERLAP)
+        )
 
         scale_x = art_size[0] / source_width
         scale_y = art_size[1] / source_height
@@ -160,24 +205,10 @@ class MenuScene:
 
         self.ui_layer.fill((0, 0, 0, 0))
         self.ui_layer.blit(self.menu_art, self.menu_art_rect)
-        pygame.draw.rect(self.ui_layer, CREAM, self.title_area, border_radius=20)
-        pygame.draw.rect(
-            self.ui_layer, TITLE_COLOR, self.title_area, 4, border_radius=20
-        )
-        draw_text_center(
-            self.ui_layer,
-            "SLICE",
-            self.title_font,
-            TITLE_COLOR,
-            (self.title_area.centerx, self.title_area.centery - 15),
-        )
-        draw_text_center(
-            self.ui_layer,
-            "by PyAgustinos",
-            self.label_font,
-            TITLE_COLOR,
-            (self.title_area.centerx, self.title_area.centery + 30),
-        )
+
+        if self.logo_image is not None:
+            self.ui_layer.blit(self.logo_image, self.logo_rect)
+
         self._draw_music_button(mouse_pos)
 
         for name, rect in self.buttons:
