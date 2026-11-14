@@ -39,13 +39,13 @@ class Game:
         self.warm_surface = pygame.Surface((WIDTH, HEIGHT))
         self.warm_surface.fill(SCREEN_FADE_COLOR)
         self.fonts = {
-            "title": pygame.font.SysFont("georgia", TITLE_FONT_SIZE, bold=True),
-            "button": pygame.font.SysFont("arial", BUTTON_FONT_SIZE),
-            "label": pygame.font.SysFont("arial", LABEL_FONT_SIZE),
-            "small": pygame.font.SysFont("arial", SMALL_FONT_SIZE),
-            "dialogue": pygame.font.SysFont("arial", DIALOGUE_FONT_SIZE),
-            "name": pygame.font.SysFont("arial", NAME_FONT_SIZE, bold=True),
-        }
+    "title": pygame.font.SysFont("comicsansms", TITLE_FONT_SIZE, bold=True),
+    "button": pygame.font.SysFont("trebuchetms", BUTTON_FONT_SIZE),
+    "label": pygame.font.SysFont("trebuchetms", LABEL_FONT_SIZE),
+    "small": pygame.font.SysFont("trebuchetms", SMALL_FONT_SIZE),
+    "dialogue": pygame.font.SysFont("trebuchetms", DIALOGUE_FONT_SIZE),
+    "name": pygame.font.SysFont("trebuchetms", NAME_FONT_SIZE, bold=True),
+}
         self.assets = AssetLoader()
         self.menu_music = MenuMusic()
         self.scene_manager = SceneManager(self)

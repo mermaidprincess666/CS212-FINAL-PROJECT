@@ -180,9 +180,10 @@ class MenuScene:
                 self.game.running = False
             else:
                 destinations = {
-                    "SETTINGS": "settings",
-                    "CREDIT": "about",
-                }
+    "SETTINGS": "settings",
+    "CREDIT": "credits",
+}
+
                 self.game.scene_manager.go_to(destinations[name])
             return
 
@@ -305,6 +306,7 @@ class MenuScene:
         self.gate_canvas.blit(
             right_image, (self.right_rect.right - right_width, self.right_rect.y)
         )
+        
         self.gate_canvas.blit(self.gate_frame, (0, 0))
         self._camera_key = None
 
@@ -336,7 +338,12 @@ class MenuScene:
         crop_height_px = max(1, round(crop_height * scale))
         key = (crop_x, crop_y, crop_width, crop_height, crop_width_px, crop_height_px)
         if key != self._camera_key:
-            # Rebuild only when the crop or output size changes.
+            destinations = {
+    "SETTINGS": "settings",
+    "CREDIT": "credits",
+}
+
+       # Rebuild only when the crop or output size changes.
             self._camera_key = key
             crop = self.gate_canvas.subsurface(
                 pygame.Rect(crop_x, crop_y, crop_width, crop_height)
