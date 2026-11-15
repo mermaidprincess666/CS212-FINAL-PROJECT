@@ -1,446 +1,757 @@
-
-"""The opening story scene and its messaging-style dialogue."""
-
 import math
-
 import pygame
 
-from screens.common import draw_button, draw_text_center
-from settings import (
-    BUTTON_BORDER,
-    CREAM,
-    FADE_SPEED,
-    HEIGHT,
-    LINE_HEIGHT,
-    POP_FADE,
-    POP_LENGTH,
-    SCENE_COUNTER,
-    SCENE_FLOOR,
-    SCENE_LAMP,
-    SCENE_WALL,
-    TITLE_COLOR,
-    TYPE_SPEED,
-    WIDTH,
-)
+from settings import WIDTH, HEIGHT, ASSETS_DIR
 
 
-INTRO_DIALOGUE = [
-    (
-        "Mom",
-        "Good morning, sweetheart! Today is your graduation, right?",
-    ),
-    (
-        "You",
-        "MOM!! IT'S MY GRADUATION! I can't believe I finally made it!!",
-    ),
-    (
-        "Mom",
-        "I'm so proud of you! This is only the beginning of something wonderful.",
-    ),
-    (
-        "You",
-        "I know! A fresh start, a new dream... and maybe my very own pizza restaurant?",
-    ),
-    (
-        "Mom",
-        "A pizza restaurant?! You really are serious about this, aren't you?",
-    ),
-    (
-        "You",
-        "Of course! I'm going to make it happen. Wish me luck, Mom!",
-    ),
-    (
-        "Mom",
-        "I believe in you, sweetheart. Just remember to enjoy the journey!",
-    ),
-    (
-        "You",
-        "I will, Mom! Love you! <3",
-    ),
+BLACK = (0, 0, 0)
+DARK = (75, 39, 35)
+TERRA = (177, 83, 62)
+WHITE = (255, 252, 244)
+
+INTRO_DIR = ASSETS_DIR / "INTRO"
+
+HALF = WIDTH // 2
+SLIDE_DURATION = 0.85
+TYPE_SPEED = 45
+
+PANEL_BORDER_COLOR = (91, 28, 27)
+PANEL_BORDER_WIDTH = 20             # diagonal edges
+PANEL_STRAIGHT_BORDER_WIDTH = 12    # straight (vertical) edges
+
+# Black gap between different pairs (P2|P3 and P4|P5).
+# Part of the layout, so pairs never need to be painted over.
+PAIR_GAP = 20
+
+# Black line inside a pair (P1|P2, P3|P4, P5|P6). 0 = fully merged.
+MERGE_GAP = 8
+
+
+STORY = [
+    (1, "NARRATOR", "Somewhere in a little town, life moved at its own familiar pace."),
+    (1, "NARRATOR", "Every day brought something ordinary. Another morning, another routine, another familiar face."),
+    (1, "NARRATOR", "And somewhere among them was someone with a dream of their own."),
+
+    (2, "NARRATOR", "Some dreams begin long before we even realize it."),
+    (2, "NARRATOR", "For as long as they could remember, the kitchen had always felt like a second home."),
+    (2, "NARRATOR", "To them, cooking was more than simply preparing food."),
+    (2, "NARRATOR", "It was creativity. Passion. And the joy of sharing something made with care."),
+
+    (3, "NARRATOR", "Years of studying, experimenting, and countless hours spent in the kitchen..."),
+    (3, "NARRATOR", "Not to mention a few unfortunate cooking disasters."),
+    (3, "NARRATOR", "And finally, the day had come."),
+    (3, "PROTAGONIST (THOUGHTS)", "So... that's it, huh?"),
+    (3, "PROTAGONIST (THOUGHTS)", "All those years of studying, and now I'm officially a culinary arts graduate."),
+    (3, "PROTAGONIST (THOUGHTS)", "..."),
+    (3, "PROTAGONIST (THOUGHTS)", "Guess I should start looking for a job."),
+
+    (4, "PROTAGONIST (THOUGHTS)", "...Or."),
+    (4, "PROTAGONIST (THOUGHTS)", "What if I didn't?"),
+    (4, "PROTAGONIST (THOUGHTS)", "What if I made something of my own?"),
+    (4, "PROTAGONIST (THOUGHTS)", "A place where I could serve my own recipes, experiment with new ideas, and do things my way."),
+    (4, "PROTAGONIST (THOUGHTS)", "Heh."),
+    (4, "PROTAGONIST (THOUGHTS)", "Now THAT sounds like a plan."),
+
+    (5, "NARRATOR", "Of course, every dream needs somewhere to begin."),
+    (5, "NARRATOR", "And sometimes, the perfect opportunity is hiding in plain sight."),
+
+    (6, "NARRATOR", "An empty stall."),
+    (6, "NARRATOR", "A fresh opportunity."),
+    (6, "NARRATOR", "And a whole lot of possibilities."),
+    (6, "NARRATOR", "And so, with a dream in mind and a recipe book in hand..."),
+    (6, "NARRATOR", "A new adventure was about to begin."),
 ]
 
 
 class IntroScene:
-    """Handle the messaging conversation and story transitions."""
-
     def __init__(self, game):
         self.game = game
 
-        self.dialogue_font = game.fonts["dialogue"]
-        self.label_font = game.fonts["label"]
-        self.name_font = game.fonts["name"]
+        self.dialogue_font = self._load_font(
+            "Fredoka/static/Fredoka-SemiBold.ttf",
+            28,
+            game.fonts.get("dialogue")
+        )
 
-        self.back_button = pygame.Rect(40, HEIGHT - 60, 140, 40)
-        self.next_button = pygame.Rect(WIDTH - 180, HEIGHT - 60, 140, 40)
-        self.skip_button = pygame.Rect(WIDTH - 340, HEIGHT - 60, 140, 40)
+        self.label_font = self._load_font(
+            "Fredoka/static/Fredoka-SemiBold.ttf",
+            20,
+            game.fonts.get("label")
+        )
 
-        self.chat_window = pygame.Rect(110, 75, WIDTH - 220, 510)
+        self.button_font = self._load_font(
+            "Fredoka/static/Fredoka-SemiBold.ttf",
+            21,
+            game.fonts.get("small")
+        )
+
+        # Preload all six panels. Borders are computed once here and
+        # cached in self.borders, then baked into the cached panel surface.
+        self.panels = {}
+        self.borders = {}
+
+        for number in range(1, 7):
+            path = INTRO_DIR / f"p{number}.png"
+
+            try:
+                image = pygame.image.load(
+                    str(path)
+                ).convert_alpha()
+
+                image = pygame.transform.smoothscale(
+                    image,
+                    (WIDTH, HEIGHT)
+                )
+
+                # Odd panels: left border. Even panels: right border.
+                side = "left" if number % 2 == 1 else "right"
+
+                border = self._build_border(image, side)
+                self.borders[number] = border
+
+                image = image.copy()
+                image.blit(border, (0, 0))
+
+                self.panels[number] = image
+
+            except (OSError, pygame.error):
+                print(f"Missing panel: {path}")
+
+                self.panels[number] = pygame.Surface(
+                    (WIDTH, HEIGHT),
+                    pygame.SRCALPHA
+                )
+                self.borders[number] = pygame.Surface(
+                    (WIDTH, HEIGHT),
+                    pygame.SRCALPHA
+                )
+
+        # Pair 0 = P1 + P2
+        # Pair 1 = P3 + P4
+        # Pair 2 = P5 + P6
+        self.pair_x = {
+            0: float(WIDTH),
+            1: float(WIDTH),
+            2: float(WIDTH),
+        }
+
+        self.pair_start = dict(self.pair_x)
+        self.pair_target = dict(self.pair_x)
+
+        self.transition_time = 0.0
+        self.transitioning = False
 
         self.index = 0
-        self.text_alpha = 255
-        self.fade_state = "none"
-        self.pending_index = 0
+        self.current_panel = 1
+
         self.characters_shown = 0.0
         self.advance_requested = False
+
+        self.bubble_scale = 0.75
+        self.bubble_timer = 0.0
+        self.bubble_duration = 0.18
+
+        self.bubble_positions = [
+            (0.06, 0.13),
+            (0.10, 0.55),
+        ]
+
+        self.back_button = pygame.Rect(
+            35,
+            HEIGHT - 60,
+            130,
+            42
+        )
+
+        self.skip_button = pygame.Rect(
+            WIDTH - 325,
+            HEIGHT - 60,
+            130,
+            42
+        )
+
+        self.next_button = pygame.Rect(
+            WIDTH - 180,
+            HEIGHT - 60,
+            145,
+            42
+        )
+
+        self.pending_index = 0
+
+        self.reset()
+
+    def _load_font(self, relative_path, size, fallback):
+        path = ASSETS_DIR / "FONTS" / relative_path
+
+        try:
+            return pygame.font.Font(
+                str(path),
+                size
+            )
+
+        except (OSError, pygame.error):
+            return fallback or pygame.font.Font(
+                None,
+                size
+            )
+
+    def _build_border(self, image, side):
+        """
+        Border follows the visible edge of the artwork.
+        Rows whose edge sits on the image boundary (straight edge) use
+        PANEL_STRAIGHT_BORDER_WIDTH; diagonal rows use PANEL_BORDER_WIDTH.
+        """
+        width, height = image.get_size()
+        mask = pygame.mask.from_surface(image, 20)
+
+        border = pygame.Surface((width, height), pygame.SRCALPHA)
+
+        for y in range(height):
+            if side == "left":
+                xs = range(width)
+            else:
+                xs = range(width - 1, -1, -1)
+
+            edge_x = None
+            for x in xs:
+                if mask.get_at((x, y)):
+                    edge_x = x
+                    break
+
+            if edge_x is None:
+                continue
+
+            straight = edge_x <= 0 if side == "left" else edge_x >= width - 1
+            w = (
+                PANEL_STRAIGHT_BORDER_WIDTH
+                if straight
+                else PANEL_BORDER_WIDTH
+            )
+
+            if side == "left":
+                rect = (edge_x, y, w, 1)
+            else:
+                rect = (edge_x - w + 1, y, w, 1)
+
+            border.fill(PANEL_BORDER_COLOR, rect)
+
+        # Keep the border strictly inside the opaque artwork.
+        result = pygame.Surface((width, height), pygame.SRCALPHA)
+        mask.to_surface(result, setsurface=border, unsetcolor=(0, 0, 0, 0))
+
+        return result
+
+    def _targets_for(self, current):
+        """
+        Screen x of each pair for the given current panel.
+
+        Pairs sit on one strip with PAIR_GAP between them, so the gap is
+        part of the layout and stays constant while sliding.
+        Odd current panel  -> that pair's odd panel on the right half.
+        Even current panel -> that pair fills the screen (shifted left by
+        MERGE_GAP so the even panel's right edge is not clipped).
+        """
+        current_pair = (current - 1) // 2
+        stride = WIDTH + PAIR_GAP
+
+        if current % 2 == 1:
+            camera = current_pair * stride - HALF
+        else:
+            camera = current_pair * stride + MERGE_GAP
+
+        return {
+            pair: float(pair * stride - camera)
+            for pair in range(3)
+        }
 
     def reset(self):
-        """Start the story from its first message."""
-        self.reset_for_transition(reset_story=True)
+        self.reset_for_transition(
+            reset_story=True
+        )
 
     def reset_for_transition(self, reset_story=False):
-        """Clear typing and fade states."""
         if reset_story:
             self.index = 0
+            self.current_panel = 1
 
-        self.text_alpha = 255
-        self.fade_state = "none"
-        self.pending_index = self.index
+            self.pair_x = {
+                0: float(WIDTH),
+                1: float(WIDTH),
+                2: float(WIDTH),
+            }
+
+            self.pair_start = dict(
+                self.pair_x
+            )
+
+            self.pair_target = self._targets_for(1)
+
+            self.transitioning = True
+
+        else:
+            self.pair_x = self._targets_for(
+                self.current_panel
+            )
+
+            self.pair_start = dict(
+                self.pair_x
+            )
+
+            self.pair_target = dict(
+                self.pair_x
+            )
+
+            self.transitioning = False
+
+        self.transition_time = 0.0
+
         self.characters_shown = 0.0
         self.advance_requested = False
 
-    def handle_event(self, event):
-        """Handle keyboard and mouse input."""
+        self.bubble_timer = 0.0
+        self.bubble_scale = 0.75
 
+        self.pending_index = self.index
+
+    def handle_event(self, event):
         if event.type == pygame.KEYDOWN:
-            if event.key in (pygame.K_SPACE, pygame.K_RETURN):
+            if event.key in (
+                pygame.K_SPACE,
+                pygame.K_RETURN,
+                pygame.K_RIGHT
+            ):
                 self.advance_requested = True
+
+            elif event.key == pygame.K_LEFT:
+                self._previous()
+
+            elif event.key == pygame.K_ESCAPE:
+                self.game.scene_manager.go_to(
+                    "menu"
+                )
+
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button != 1:
                 return
 
-        if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
+            pos = event.pos
+
+            if self.back_button.collidepoint(pos):
+                self._previous()
+
+            elif self.skip_button.collidepoint(pos):
+                self.game.scene_manager.go_to(
+                    "thoughts"
+                )
+
+            else:
+                self.advance_requested = True
+
+    def _previous(self):
+        if self.transitioning:
             return
 
-        if self.back_button.collidepoint(event.pos):
-            if self.index > 0:
-                if self.fade_state == "none":
-                    self.pending_index = self.index - 1
-                    self.fade_state = "out"
-            else:
-                self.game.scene_manager.go_to("menu")
+        if self.index == 0:
+            self.game.scene_manager.go_to(
+                "menu"
+            )
+            return
 
-        elif self.skip_button.collidepoint(event.pos):
-            self.game.scene_manager.go_to("thoughts")
+        self._change_story(
+            self.index - 1
+        )
 
-        elif (
-            self.next_button.collidepoint(event.pos)
-            or self.chat_window.collidepoint(event.pos)
-        ):
-            self.advance_requested = True
+    def _change_story(self, new_index):
+        old_panel = self.current_panel
+
+        self.index = new_index
+        self.pending_index = new_index
+
+        self.characters_shown = 0.0
+
+        self.bubble_timer = 0.0
+        self.bubble_scale = 0.75
+
+        new_panel = STORY[self.index][0]
+
+        self.current_panel = new_panel
+
+        if new_panel != old_panel:
+            self.pair_start = dict(
+                self.pair_x
+            )
+
+            self.pair_target = self._targets_for(
+                new_panel
+            )
+
+            self.transition_time = 0.0
+            self.transitioning = True
 
     def update(self, delta_time):
-        """Advance typing and fade between messages."""
-
-        advance_requested = self.advance_requested
-        self.advance_requested = False
-
         manager = self.game.scene_manager
 
-        if manager.screen_fade_state != "none":
+        if getattr(
+            manager,
+            "screen_fade_state",
+            "none"
+        ) != "none":
             return
 
-        if advance_requested and self.fade_state == "none":
-            typing_end = len(INTRO_DIALOGUE[self.index][1]) + POP_LENGTH
+        if self.transitioning:
+            self.transition_time += delta_time
 
-            if self.characters_shown < typing_end:
-                self.characters_shown = typing_end
+            t = min(
+                1.0,
+                self.transition_time / SLIDE_DURATION
+            )
 
-            elif self.index + 1 >= len(INTRO_DIALOGUE):
-                manager.go_to("thoughts")
+            eased = t * t * (3 - 2 * t)
+
+            for pair in self.pair_x:
+                start = self.pair_start[pair]
+                destination = self.pair_target[pair]
+
+                self.pair_x[pair] = (
+                    start
+                    + (destination - start) * eased
+                )
+
+            if t >= 1.0:
+                self.pair_x = dict(
+                    self.pair_target
+                )
+
+                self.transitioning = False
+
+        _, _, text = STORY[self.index]
+
+        if self.advance_requested:
+            self.advance_requested = False
+
+            if not self.transitioning:
+                if self.characters_shown < len(text):
+                    self.characters_shown = float(
+                        len(text)
+                    )
+
+                elif self.index + 1 < len(STORY):
+                    self._change_story(
+                        self.index + 1
+                    )
+
+                else:
+                    manager.go_to(
+                        "thoughts"
+                    )
+                    return
+
+        if not self.transitioning:
+            current_text = STORY[self.index][2]
+
+            self.characters_shown = min(
+                float(len(current_text)),
+                self.characters_shown
+                + TYPE_SPEED * delta_time
+            )
+
+            self.bubble_timer = min(
+                self.bubble_duration,
+                self.bubble_timer + delta_time
+            )
+
+            t = (
+                self.bubble_timer
+                / self.bubble_duration
+            )
+
+            self.bubble_scale = (
+                0.75
+                + 0.25 * (1 - (1 - t) ** 3)
+            )
+
+    def _draw_panels(self, target):
+        # The black background is the gap. Nothing is painted over the
+        # artwork or borders; gaps come from positions alone.
+        target.fill(BLACK)
+
+        for pair in range(3):
+            pair_x = round(self.pair_x[pair])
+
+            # Skip pairs that are completely offscreen.
+            if pair_x >= WIDTH or pair_x + WIDTH + MERGE_GAP <= 0:
+                continue
+
+            odd_number = pair * 2 + 1
+            even_number = odd_number + 1
+
+            # Borders are already baked into these cached surfaces.
+            target.blit(
+                self.panels[odd_number],
+                (pair_x, 0)
+            )
+
+            # Even panel is offset to open the black line inside the pair.
+            target.blit(
+                self.panels[even_number],
+                (pair_x + MERGE_GAP, 0)
+            )
+
+    def _wrap_text(self, text, font, max_width):
+        lines = []
+        current = ""
+
+        for word in text.split():
+            test = f"{current} {word}".strip()
+
+            if font.size(test)[0] <= max_width:
+                current = test
 
             else:
-                self.pending_index = self.index + 1
-                self.fade_state = "out"
+                if current:
+                    lines.append(current)
 
-        if self.fade_state == "out":
-            self.text_alpha -= FADE_SPEED
+                current = word
 
-            if self.text_alpha <= 0:
-                self.text_alpha = 0
-                self.index = self.pending_index
-                self.characters_shown = 0.0
-                self.fade_state = "in"
+        if current:
+            lines.append(current)
 
-        elif self.fade_state == "in":
-            self.text_alpha += FADE_SPEED
+        return lines or [""]
 
-            if self.text_alpha >= 255:
-                self.text_alpha = 255
-                self.fade_state = "none"
+    def _draw_dialogue(self, target):
+        if self.transitioning:
+            return
 
-        # Continue the typewriter animation.
-        if (
-            self.fade_state != "out"
-            and manager.white_in_alpha < 0.4
-            and self.characters_shown
-            < len(INTRO_DIALOGUE[self.index][1]) + POP_LENGTH
-        ):
-            self.characters_shown = min(
-                self.characters_shown + TYPE_SPEED,
-                len(INTRO_DIALOGUE[self.index][1]) + POP_LENGTH,
+        _, _, text = STORY[self.index]
+
+        font = self.dialogue_font
+        max_width = HALF - 40
+
+        full_lines = self._wrap_text(
+            text,
+            font,
+            max_width - 48
+        )
+
+        line_height = (
+            font.get_linesize() + 5
+        )
+
+        bubble_width = max(
+            220,
+            min(
+                max_width,
+                max(
+                    font.size(line)[0]
+                    for line in full_lines
+                ) + 48
+            )
+        )
+
+        bubble_height = (
+            len(full_lines) * line_height
+            + 44
+        )
+
+        rx, ry = self.bubble_positions[
+            self.index % len(
+                self.bubble_positions
+            )
+        ]
+
+        x = HALF + int(HALF * rx)
+        y = int(HEIGHT * ry)
+
+        x = max(
+            HALF + 10,
+            min(
+                x,
+                WIDTH - bubble_width - 20
+            )
+        )
+
+        y = max(
+            45,
+            min(
+                y,
+                HEIGHT - bubble_height - 75
+            )
+        )
+
+        bubble_surface = pygame.Surface(
+            (bubble_width, bubble_height),
+            pygame.SRCALPHA
+        )
+
+        pygame.draw.rect(
+            bubble_surface,
+            (12, 12, 14, 245),
+            bubble_surface.get_rect(),
+            border_radius=17
+        )
+
+        visible_text = text[
+            :int(self.characters_shown)
+        ]
+
+        visible_lines = self._wrap_text(
+            visible_text,
+            font,
+            max_width - 48
+        )
+
+        text_y = 20
+
+        for line in visible_lines:
+            rendered = font.render(
+                line,
+                True,
+                WHITE
             )
 
-    def draw(self, target, mouse_pos):
-        """Draw the messaging conversation with Mom."""
-
-        speaker, text = INTRO_DIALOGUE[self.index]
-
-        # Background
-        target.fill(SCENE_WALL)
-
-        pygame.draw.rect(
-            target,
-            SCENE_COUNTER,
-            (0, 300, WIDTH, 90),
-        )
-
-        pygame.draw.rect(
-            target,
-            SCENE_FLOOR,
-            (0, 390, WIDTH, HEIGHT - 390),
-        )
-
-        # Bakery decorations
-        for lamp_x in (200, 1000):
-            pygame.draw.line(
-                target,
-                TITLE_COLOR,
-                (lamp_x, 0),
-                (lamp_x, 55),
-                3,
+            bubble_surface.blit(
+                rendered,
+                (24, text_y)
             )
 
-            pygame.draw.circle(
-                target,
-                SCENE_LAMP,
-                (lamp_x, 75),
-                28,
+            text_y += line_height
+
+        scale = self.bubble_scale
+
+        scaled_width = max(
+            1,
+            int(bubble_width * scale)
+        )
+
+        scaled_height = max(
+            1,
+            int(bubble_height * scale)
+        )
+
+        scaled_bubble = pygame.transform.smoothscale(
+            bubble_surface,
+            (
+                scaled_width,
+                scaled_height
             )
-
-        # Main chat window
-        pygame.draw.rect(
-            target,
-            (83, 53, 43),
-            self.chat_window,
-            border_radius=22,
         )
 
-        inner_window = self.chat_window.inflate(-8, -8)
-
-        pygame.draw.rect(
-            target,
-            CREAM,
-            inner_window,
-            border_radius=18,
+        center_x = (
+            x + bubble_width // 2
         )
 
-        # Chat header
-        header = pygame.Rect(
-            self.chat_window.x + 5,
-            self.chat_window.y + 5,
-            self.chat_window.width - 10,
-            75,
+        center_y = (
+            y + bubble_height // 2
         )
 
-        pygame.draw.rect(
-            target,
-            (153, 165, 137),
-            header,
-            border_radius=16,
+        bubble_rect = scaled_bubble.get_rect(
+            center=(
+                center_x,
+                center_y
+            )
         )
-
-        draw_text_center(
-            target,
-            "MESSAGES",
-            self.name_font,
-            (255, 250, 240),
-            (header.centerx, header.y + 25),
-        )
-
-        draw_text_center(
-            target,
-            "My Mommy ^^",
-            self.label_font,
-            (255, 250, 240),
-            (header.centerx, header.y + 53),
-        )
-
-        # Message bubble
-        bubble_width = 780
-        text_padding = 28
-        max_text_width = bubble_width - (text_padding * 2)
-
-        wrapped_lines = self._wrap_text(text, max_text_width)
-
-        bubble_height = len(wrapped_lines) * LINE_HEIGHT + 75
-        bubble_y = header.bottom + 65
-
-        if speaker == "Mom":
-            bubble_x = self.chat_window.x + 35
-            bubble_color = (255, 250, 240)
-            name_color = (153, 165, 137)
-        else:
-            bubble_x = self.chat_window.right - bubble_width - 35
-            bubble_color = (190, 220, 190)
-            name_color = (105, 135, 105)
-
-        bubble = pygame.Rect(
-            bubble_x,
-            bubble_y,
-            bubble_width,
-            bubble_height,
-        )
-
-        pygame.draw.rect(
-            target,
-            bubble_color,
-            bubble,
-            border_radius=22,
-        )
-
-        pygame.draw.rect(
-            target,
-            (105, 65, 51),
-            bubble,
-            2,
-            border_radius=22,
-        )
-
-        # Speaker name
-        name_image = self.label_font.render(
-            speaker,
-            True,
-            name_color,
-        )
-
-        name_image.set_alpha(self.text_alpha)
 
         target.blit(
-            name_image,
-            (bubble.x + text_padding, bubble.y + 15),
+            scaled_bubble,
+            bubble_rect
         )
 
-        # Typed message
-        self._draw_typed_text(
-            target,
-            text,
-            bubble.x + text_padding,
-            bubble.y + 45,
-            max_text_width,
-        )
-
-        # Advance indicator
-        typing_finished = len(text) + POP_LENGTH
-
-        if (
-            self.text_alpha == 255
-            and self.characters_shown >= typing_finished
-        ):
+        if self.characters_shown >= len(text):
             bounce = int(
-                4 * math.sin(pygame.time.get_ticks() * 0.008)
+                3 * math.sin(
+                    pygame.time.get_ticks()
+                    * 0.008
+                )
             )
 
-            draw_text_center(
-                target,
-                "...",
-                self.label_font,
-                TITLE_COLOR,
+            indicator = self.label_font.render(
+                "▼",
+                True,
+                WHITE
+            )
+
+            target.blit(
+                indicator,
                 (
-                    self.chat_window.centerx,
-                    self.chat_window.bottom - 25 + bounce,
-                ),
+                    bubble_rect.right - 30,
+                    bubble_rect.bottom - 27 + bounce
+                )
             )
 
-        # Navigation buttons
-        button_font = self.game.fonts["small"]
+    def _draw_button(
+        self,
+        target,
+        rect,
+        label,
+        mouse_pos
+    ):
+        hovered = rect.collidepoint(
+            mouse_pos
+        )
 
-        draw_button(
+        color = (
+            (202, 105, 76)
+            if hovered
+            else TERRA
+        )
+
+        pygame.draw.rect(
+            target,
+            DARK,
+            rect.move(3, 4),
+            border_radius=9
+        )
+
+        pygame.draw.rect(
+            target,
+            color,
+            rect,
+            border_radius=9
+        )
+
+        pygame.draw.rect(
+            target,
+            DARK,
+            rect,
+            2,
+            border_radius=9
+        )
+
+        image = self.button_font.render(
+            label,
+            True,
+            WHITE
+        )
+
+        target.blit(
+            image,
+            image.get_rect(
+                center=rect.center
+            )
+        )
+
+    def draw(self, target, mouse_pos):
+        self._draw_panels(target)
+        self._draw_dialogue(target)
+
+        self._draw_button(
             target,
             self.back_button,
             "BACK",
-            mouse_pos,
-            button_font,
+            mouse_pos
         )
 
-        draw_button(
+        self._draw_button(
             target,
             self.skip_button,
             "SKIP",
-            mouse_pos,
-            button_font,
+            mouse_pos
         )
 
-        draw_button(
+        self._draw_button(
             target,
             self.next_button,
             "NEXT",
-            mouse_pos,
-            button_font,
+            mouse_pos
         )
-
-    def _draw_typed_text(self, target, text, x, y, max_width):
-        """Reveal the message one letter at a time."""
-
-        lines = self._wrap_text(text, max_width)
-        character_index = 0
-
-        for line in lines:
-            for letter_index, letter in enumerate(line):
-                if character_index >= self.characters_shown:
-                    return
-
-                if letter != " ":
-                    age = self.characters_shown - character_index
-                    progress = min(1.0, age / POP_LENGTH)
-
-                    alpha = int(
-                        self.text_alpha
-                        * (1 - (1 - progress) * POP_FADE)
-                    )
-
-                    image = self.dialogue_font.render(
-                        letter,
-                        True,
-                        TITLE_COLOR,
-                    )
-
-                    image.set_alpha(alpha)
-
-                    letter_x = (
-                        x + self.dialogue_font.size(
-                            line[:letter_index]
-                        )[0]
-                    )
-
-                    target.blit(
-                        image,
-                        (int(letter_x), int(y)),
-                    )
-
-                character_index += 1
-
-            y += LINE_HEIGHT
-
-    def _wrap_text(self, text, max_width):
-        """Wrap dialogue on word boundaries."""
-
-        lines = []
-        current_line = ""
-
-        for word in text.split():
-            candidate = (
-                current_line + word + " "
-                if current_line
-                else word + " "
-            )
-
-            if self.dialogue_font.size(candidate)[0] <= max_width:
-                current_line = candidate
-            else:
-                if current_line:
-                    lines.append(current_line)
-
-                current_line = word + " "
-
-        if current_line:
-            lines.append(current_line)
-
-        return lines
