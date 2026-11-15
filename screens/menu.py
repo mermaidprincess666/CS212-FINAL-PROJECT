@@ -321,7 +321,9 @@ class MenuScene:
                 self.game.scene_manager.set_scene("settings")
 
             elif name == "CREDIT":
-                self.game.scene_manager.go_to("credits")
+                credits_scene = self.game.scene_manager.scenes["credits"]
+                credits_scene.start_popup()
+                self.game.scene_manager.set_scene("credits")
 
             elif name == "EXIT":
                 self.game.running = False
