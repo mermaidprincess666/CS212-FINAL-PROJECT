@@ -59,23 +59,11 @@ class MenuScene:
             TITLE_X, TITLE_Y, TITLE_WIDTH, TITLE_HEIGHT
         )
 
-        self.music_button_rect = pygame.Rect(24, 24, 90, 90)
+        # Sound button
+        self.music_button_rect = pygame.Rect(24, 24, 67, 67)
 
-        self.sound_on_image = pygame.transform.smoothscale(
-            self.game.assets.load_image(
-                "sound.png",
-                subdirectory="MENU/SOUND"
-            ),
-            self.music_button_rect.size
-        )
-
-        self.sound_off_image = pygame.transform.smoothscale(
-            self.game.assets.load_image(
-                "sound_m.png",
-                subdirectory="MENU/SOUND"
-            ),
-            self.music_button_rect.size
-        )
+        self.sound_on_image = self._load_sound_button("sound.png")
+        self.sound_off_image = self._load_sound_button("sound_m.png")
 
         self.logo_image = None
         self.logo_rect = pygame.Rect(0, 0, 0, 0)
@@ -96,6 +84,36 @@ class MenuScene:
 
         self._load_menu_artwork()
         self._load_gate_artwork()
+
+    def _load_sound_button(self, filename):
+        image = self.game.assets.load_image(
+            filename,
+            subdirectory="MENU/SOUND"
+        ).convert_alpha()
+
+        # Remove transparent padding around the artwork.
+        bounds = image.get_bounding_rect(min_alpha=10)
+
+        if bounds.width > 0 and bounds.height > 0:
+            image = image.subsurface(bounds).copy()
+
+        # Preserve the PNG's original aspect ratio.
+        image_width, image_height = image.get_size()
+
+        scale = min(
+            self.music_button_rect.width / image_width,
+            self.music_button_rect.height / image_height
+        )
+
+        new_size = (
+            max(1, round(image_width * scale)),
+            max(1, round(image_height * scale))
+        )
+
+        return pygame.transform.smoothscale(
+            image,
+            new_size
+        )
 
     def _load_menu_artwork(self):
         source = self.game.assets.load_image(
@@ -446,30 +464,27 @@ class MenuScene:
         )
 
         hovered = rect.collidepoint(mouse_pos)
+
         pressed = (
             pygame.time.get_ticks()
             < self._music_pressed_until
         )
 
-        if hovered or pressed:
-            scale = 0.94 if pressed else 1.06
+        # Keep the button's proportions during hover and click.
+        scale = 0.94 if pressed else 1.06 if hovered else 1.0
 
-            size = (
-                max(1, round(rect.width * scale)),
-                max(1, round(rect.height * scale))
-            )
-
+        if scale != 1.0:
             image = pygame.transform.smoothscale(
                 image,
-                size
+                (
+                    max(1, round(image.get_width() * scale)),
+                    max(1, round(image.get_height() * scale))
+                )
             )
 
-            image_rect = image.get_rect(
-                center=rect.center
-            )
-
-        else:
-            image_rect = rect
+        image_rect = image.get_rect(
+            center=rect.center
+        )
 
         self.ui_layer.blit(
             image,
