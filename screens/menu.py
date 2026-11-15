@@ -59,7 +59,23 @@ class MenuScene:
             TITLE_X, TITLE_Y, TITLE_WIDTH, TITLE_HEIGHT
         )
 
-        self.music_button_rect = pygame.Rect(24, 24, 48, 48)
+        self.music_button_rect = pygame.Rect(24, 24, 90, 90)
+
+        self.sound_on_image = pygame.transform.smoothscale(
+            self.game.assets.load_image(
+                "sound.png",
+                subdirectory="MENU/SOUND"
+            ),
+            self.music_button_rect.size
+        )
+
+        self.sound_off_image = pygame.transform.smoothscale(
+            self.game.assets.load_image(
+                "sound_m.png",
+                subdirectory="MENU/SOUND"
+            ),
+            self.music_button_rect.size
+        )
 
         self.logo_image = None
         self.logo_rect = pygame.Rect(0, 0, 0, 0)
@@ -423,97 +439,42 @@ class MenuScene:
     def _draw_music_button(self, mouse_pos):
         rect = self.music_button_rect
 
-        hovered = rect.collidepoint(mouse_pos)
+        image = (
+            self.sound_off_image
+            if self.game.menu_music.muted
+            else self.sound_on_image
+        )
 
+        hovered = rect.collidepoint(mouse_pos)
         pressed = (
             pygame.time.get_ticks()
             < self._music_pressed_until
         )
 
-        fill = (
-            (235, 220, 195)
-            if hovered
-            else CREAM
-        )
+        if hovered or pressed:
+            scale = 0.94 if pressed else 1.06
 
-        pygame.draw.rect(
-            self.ui_layer,
-            fill,
-            rect,
-            border_radius=12
-        )
-
-        pygame.draw.rect(
-            self.ui_layer,
-            TITLE_COLOR,
-            rect,
-            2,
-            border_radius=12
-        )
-
-        center_x = rect.centerx
-        center_y = rect.centery + int(pressed)
-
-        speaker = [
-            (center_x - 12, center_y - 5),
-            (center_x - 6, center_y - 5),
-            (center_x + 2, center_y - 11),
-            (center_x + 2, center_y + 11),
-            (center_x - 6, center_y + 5),
-            (center_x - 12, center_y + 5),
-        ]
-
-        pygame.draw.polygon(
-            self.ui_layer,
-            TITLE_COLOR,
-            speaker
-        )
-
-        if self.game.menu_music.muted:
-            pygame.draw.line(
-                self.ui_layer,
-                TITLE_COLOR,
-                (center_x + 7, center_y - 6),
-                (center_x + 14, center_y + 6),
-                3
+            size = (
+                max(1, round(rect.width * scale)),
+                max(1, round(rect.height * scale))
             )
 
-            pygame.draw.line(
-                self.ui_layer,
-                TITLE_COLOR,
-                (center_x + 14, center_y - 6),
-                (center_x + 7, center_y + 6),
-                3
+            image = pygame.transform.smoothscale(
+                image,
+                size
+            )
+
+            image_rect = image.get_rect(
+                center=rect.center
             )
 
         else:
-            pygame.draw.arc(
-                self.ui_layer,
-                TITLE_COLOR,
-                pygame.Rect(
-                    center_x - 5,
-                    center_y - 10,
-                    17,
-                    20
-                ),
-                -math.pi / 3,
-                math.pi / 3,
-                2
-            )
+            image_rect = rect
 
-            pygame.draw.arc(
-                self.ui_layer,
-                TITLE_COLOR,
-                pygame.Rect(
-                    center_x - 7,
-                    center_y - 14,
-                    25,
-                    28
-                ),
-                -math.pi / 3,
-                math.pi / 3,
-                2
-            )
+        self.ui_layer.blit(
+            image,
+            image_rect
+        )
 
     def compose_scene(self, open_amount):
         key = round(open_amount, 3)
