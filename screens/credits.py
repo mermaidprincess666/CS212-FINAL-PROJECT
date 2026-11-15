@@ -94,56 +94,84 @@ class CreditsScreen:
 
         # Credits content
         self.credits = [
-            (
-                "GAME DEVELOPERS",
-                [
-                    "Adelantar, Chloe Kaye Isabelle",
-                    "Cawaling, Divine Joy",
-                    "Cortel, Roehla",
-                    "Galve, Hanna Sophia",
-                    "Solis, Charleigh Kim",
-                ]
-            ),
-            (
-                "LEAD DEVELOPERS",
-                [
-                    "Cortel, Roehla",
-                    "Galve, Hanna Sophia",
-                ]
-            ),
-            (
-                "ARTISTS",
-                [
-                    "Cawaling, Divine Joy",
-                    "Galve, Hanna Sophia",
-                    "Solis, Charleigh Kim",
-
-                ]
-            ),
-            (
-                "AUDIO & SOUND",
-                [
-                    "Adelantar, Chloe Kaye Isabelle",
-                    "Cortel, Roehla",
-                    "Galve, Hanna Sophia",
-                ]
-            ),
-            (
-                "GAME FLOW",
-                [
-                    "Adelantar, Chloe Kaye Isabelle",
-                    "Cortel, Roehla",
-                    "Galve, Hanna Sophia",
-                    "Solis, Charleigh Kim",
-                ]
-            ),
-            (
-                "SPECIAL THANKS",
-                [
-                    "Maem Trixie Anne Depra",
-                ]
-            ),
+    (
+        "GAME DEVELOPERS",
+        [
+            "Adelantar, Chloe Kaye Isabelle",
+            "Cawaling, Divine Joy",
+            "Cortel, Roehla",
+            "Galve, Hanna Sophia",
+            "Solis, Charleigh Kim",
         ]
+    ),
+    (
+        "LEAD DEVELOPERS",
+        [
+            "Adelantar, Chloe Kaye Isabelle",
+            "Cortel, Roehla",
+            "Galve, Hanna Sophia",
+        ]
+    ),
+    (
+        "ARTISTS",
+        [
+            "Solis, Charleigh Kim",
+            "Cawaling, Divine Joy",
+            "Galve, Hanna Sophia",
+        ]
+    ),
+    (
+        "AUDIO & SOUND",
+        [
+            "Adelantar, Chloe Kaye Isabelle",
+            "Cortel, Roehla",
+            "Galve, Hanna Sophia",
+        ]
+    ),
+    (
+        "GAME FLOW",
+        [
+            "Adelantar, Chloe Kaye Isabelle",
+            "Cortel, Roehla",
+            "Galve, Hanna Sophia",
+            "Solis, Charleigh Kim",
+        ]
+    ),
+    (
+        "SPECIAL THANKS",
+        [
+            "Ms. Trixie Ann Depra",
+            "For the guidance, patience, and knowledge",
+            "shared with us throughout this project.",
+        ]
+    ),
+    (
+        "A MESSAGE TO OUR MEMBERS",
+        [
+            "To every member of our team, thank you for your",
+            "time, effort, creativity, and dedication.",
+            "Creating this game was not always easy, and",
+            "we faced challenges along the way.",
+            "But through every line of code, every design,",
+            "and every improvement, we continued moving",
+            "forward together.",
+            "",
+            "This project is more than just a game.",
+            "It represents our teamwork, patience,",
+            "and determination.",
+            "Thank you for being part of this journey",
+            "and for making SLICE possible!",
+        ]
+    ),
+    (
+        "THANK YOU FOR PLAYING!",
+        [
+            "Made with love by PyAgustinos",
+        ]
+    ),
+]
+
+
 
         # Cached surfaces
         self.background_snapshot = None
