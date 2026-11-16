@@ -1,3 +1,4 @@
+
 """Main menu and the gate-opening transition animation."""
 
 import math
@@ -39,13 +40,19 @@ MENU_BUTTONS = (
     ("EXIT", "exit"),
 )
 
-PIZZA_SCALE = 0.8
-PIZZA_MARGIN = ui(20)
+PIZZA_SCALE = 0.65
+PIZZA_MARGIN = ui(0)
 LOGO_WIDTH_FACTOR = 2.4
-LOGO_OVERLAP = ui(80)
 LOGO_TOP_MARGIN = ui(10)
 LOGO_SIDE_MARGIN = ui(10)
 CENTER_BIAS = 0.35
+
+# Increase this value for more space between title and pizza.
+TITLE_MENU_GAP = ui(-20)
+
+# Position the pizza inside the circled area.
+PIZZA_SHIFT_LEFT = ui(100)
+PIZZA_SHIFT_UP = ui(35)
 
 
 class MenuScene:
@@ -60,7 +67,6 @@ class MenuScene:
             TITLE_X, TITLE_Y, TITLE_WIDTH, TITLE_HEIGHT
         )
 
-        # Sound button
         self.music_button_rect = pygame.Rect(
             ui(24), ui(24), ui(67), ui(67)
         )
@@ -73,6 +79,8 @@ class MenuScene:
 
         self._music_pressed_until = 0
         self.buttons = []
+        self.button_masks = {}
+        self.button_art = {}
 
         self.ui_layer = pygame.Surface(
             (WIDTH, HEIGHT), pygame.SRCALPHA
@@ -94,13 +102,11 @@ class MenuScene:
             subdirectory="MENU/SOUND"
         ).convert_alpha()
 
-        # Remove transparent padding around the artwork.
         bounds = image.get_bounding_rect(min_alpha=10)
 
         if bounds.width > 0 and bounds.height > 0:
             image = image.subsurface(bounds).copy()
 
-        # Preserve the PNG's original aspect ratio.
         image_width, image_height = image.get_size()
 
         scale = min(
@@ -113,10 +119,7 @@ class MenuScene:
             max(1, round(image_height * scale))
         )
 
-        return pygame.transform.smoothscale(
-            image,
-            new_size
-        )
+        return pygame.transform.smoothscale(image, new_size)
 
     def _load_menu_artwork(self):
         source = self.game.assets.load_image(
@@ -130,7 +133,6 @@ class MenuScene:
         )
 
         source_width, source_height = source.get_size()
-
         available_size = HEIGHT - TITLE_Y - TITLE_HEIGHT
 
         scale = (
@@ -139,58 +141,16 @@ class MenuScene:
         ) * PIZZA_SCALE
 
         art_size = (
-            round(source_width * scale),
-            round(source_height * scale)
+            max(1, round(source_width * scale)),
+            max(1, round(source_height * scale))
         )
 
         self.menu_art = pygame.transform.smoothscale(
             source, art_size
         )
 
-        self.menu_art_rect = pygame.Rect(
-            0, 0, *art_size
-        )
-
-        self.menu_art_rect.bottom = HEIGHT - PIZZA_MARGIN
-
-        self.button_art = {}
-
-        logo_width = round(
-            art_size[0] * LOGO_WIDTH_FACTOR
-        )
-
-        logo_width = min(
-            logo_width,
-            WIDTH - 2 * LOGO_SIDE_MARGIN
-        )
-
-        logo_height = round(
-            logo_source.get_height()
-            * logo_width
-            / logo_source.get_width()
-        )
-
-        max_height = (
-            self.menu_art_rect.top
-            + LOGO_OVERLAP
-            - LOGO_TOP_MARGIN
-        )
-
-        if logo_height > max_height > 0:
-            shrink = max_height / logo_height
-
-            logo_width = max(
-                1, round(logo_width * shrink)
-            )
-
-            logo_height = max(
-                1, round(logo_height * shrink)
-            )
-
-        self.logo_image = pygame.transform.smoothscale(
-            logo_source,
-            (logo_width, logo_height)
-        )
+        self.menu_art_rect = pygame.Rect(0, 0, *art_size)
+        self.menu_art_rect.bottom = HEIGHT - PIZZA_MARGIN - PIZZA_SHIFT_UP
 
         right_x = (
             WIDTH
@@ -203,28 +163,12 @@ class MenuScene:
             + (WIDTH / 2 - right_x) * CENTER_BIAS
         )
 
-        half_logo = (
-            logo_width // 2
-            + LOGO_SIDE_MARGIN
-        )
-
-        center_x = max(
-            half_logo,
-            min(center_x, WIDTH - half_logo)
-        )
-
-        self.menu_art_rect.centerx = center_x
-
-        self.logo_rect = self.logo_image.get_rect(
-            midbottom=(
-                center_x,
-                self.menu_art_rect.top + LOGO_OVERLAP
-            )
-        )
+        self.menu_art_rect.centerx = center_x - ui(25)
 
         scale_x = art_size[0] / source_width
         scale_y = art_size[1] / source_height
 
+        # Load the buttons and calculate their real positions.
         for name, filename in MENU_BUTTONS:
             normal = self.game.assets.load_image(
                 f"{filename}.png",
@@ -260,26 +204,89 @@ class MenuScene:
                 + source_bounds.bottom * scale_y
             )
 
-            self.buttons.append(
-                (
-                    name,
-                    pygame.Rect(
-                        left,
-                        top,
-                        right - left,
-                        bottom - top
-                    )
-                )
+            rect = pygame.Rect(
+                left,
+                top,
+                max(1, right - left),
+                max(1, bottom - top)
+            )
+
+            self.buttons.append((name, rect))
+
+            normal_scaled = pygame.transform.smoothscale(
+                normal, art_size
+            )
+
+            hover_scaled = pygame.transform.smoothscale(
+                hover, art_size
             )
 
             self.button_art[name] = (
-                pygame.transform.smoothscale(
-                    normal, art_size
-                ),
-                pygame.transform.smoothscale(
-                    hover, art_size
-                )
+                normal_scaled,
+                hover_scaled
             )
+
+            # Only visible pixels activate hover and clicks.
+            self.button_masks[name] = pygame.mask.from_surface(
+                normal_scaled, 16
+            )
+
+        # Align the visible pizza buttons with the center of the SLICE title.
+        # The PNG canvas may contain transparent space, so use the
+        # actual button bounds instead of the canvas midpoint.
+        buttons_left = min(rect.left for _, rect in self.buttons)
+        buttons_right = max(rect.right for _, rect in self.buttons)
+        buttons_center = (buttons_left + buttons_right) // 2
+        horizontal_shift = center_x - buttons_center - PIZZA_SHIFT_LEFT
+
+        self.menu_art_rect.x += horizontal_shift
+        self.buttons = [
+            (name, rect.move(horizontal_shift, 0))
+            for name, rect in self.buttons
+        ]
+
+        # Position the title above the actual visible buttons.
+        first_button_top = min(
+            rect.top for _, rect in self.buttons
+        )
+
+        logo_bottom = first_button_top - TITLE_MENU_GAP + PIZZA_SHIFT_UP
+
+        logo_width = min(
+            round(art_size[0] * LOGO_WIDTH_FACTOR),
+            WIDTH - 2 * LOGO_SIDE_MARGIN
+        )
+
+        logo_height = round(
+            logo_source.get_height()
+            * logo_width
+            / logo_source.get_width()
+        )
+
+        # Keep the title inside the screen without overlapping buttons.
+        max_logo_height = max(
+            1,
+            logo_bottom - LOGO_TOP_MARGIN
+        )
+
+        if logo_height > max_logo_height:
+            shrink = max_logo_height / logo_height
+            logo_width = max(1, round(logo_width * shrink))
+            logo_height = max(1, round(logo_height * shrink))
+
+        self.logo_image = pygame.transform.smoothscale(
+            logo_source,
+            (logo_width, logo_height)
+        )
+
+        logo_center_x = max(
+            logo_width // 2,
+            min(center_x, WIDTH - logo_width // 2)
+        )
+
+        self.logo_rect = self.logo_image.get_rect(
+            midbottom=(logo_center_x, logo_bottom - ui(20))
+        )
 
     def _load_gate_artwork(self):
         self.gate_bg = self.game.assets.load_image(
@@ -320,6 +327,25 @@ class MenuScene:
             (WIDTH, HEIGHT)
         )
 
+    def _button_hit(self, name, rect, position):
+        """Check the visible pixels of a menu button."""
+        if not rect.collidepoint(position):
+            return False
+
+        local_x = position[0] - self.menu_art_rect.x
+        local_y = position[1] - self.menu_art_rect.y
+
+        mask = self.button_masks[name]
+        mask_width, mask_height = mask.get_size()
+
+        if not (
+            0 <= local_x < mask_width
+            and 0 <= local_y < mask_height
+        ):
+            return False
+
+        return bool(mask.get_at((local_x, local_y)))
+
     def handle_event(self, event):
         if (
             event.type != pygame.MOUSEBUTTONDOWN
@@ -329,20 +355,17 @@ class MenuScene:
 
         if self.music_button_rect.collidepoint(event.pos):
             self.game.menu_music.toggle()
-
             self._music_pressed_until = (
                 pygame.time.get_ticks() + 110
             )
             return
 
         for name, rect in self.buttons:
-            if not rect.collidepoint(event.pos):
+            if not self._button_hit(name, rect, event.pos):
                 continue
 
             self._pressed_button = name
-            self._pressed_until = (
-                pygame.time.get_ticks() + 100
-            )
+            self._pressed_until = pygame.time.get_ticks() + 100
 
             if name == "START GAME":
                 self.game.scene_manager.set_scene("gate")
@@ -351,14 +374,13 @@ class MenuScene:
                 settings_scene = (
                     self.game.scene_manager.scenes["settings"]
                 )
-
                 settings_scene.start_popup()
-
-                # Immediate scene switch, no screen fade.
                 self.game.scene_manager.set_scene("settings")
 
             elif name == "CREDIT":
-                credits_scene = self.game.scene_manager.scenes["credits"]
+                credits_scene = (
+                    self.game.scene_manager.scenes["credits"]
+                )
                 credits_scene.start_popup()
                 self.game.scene_manager.set_scene("credits")
 
@@ -371,14 +393,8 @@ class MenuScene:
         pass
 
     def draw(self, target, mouse_pos):
-        target.blit(
-            self.menu_background,
-            (0, 0)
-        )
-
-        self.draw_menu_ui(
-            target, mouse_pos
-        )
+        target.blit(self.menu_background, (0, 0))
+        self.draw_menu_ui(target, mouse_pos)
 
     def draw_menu_ui(
         self,
@@ -406,16 +422,19 @@ class MenuScene:
         self._draw_music_button(mouse_pos)
 
         for name, rect in self.buttons:
-            hovered = rect.collidepoint(mouse_pos)
+            hovered = self._button_hit(
+                name, rect, mouse_pos
+            )
 
             normal, hover = self.button_art[name]
             image = hover if hovered else normal
 
-            if (
+            pressed = (
                 name == self._pressed_button
-                and pygame.time.get_ticks()
-                < self._pressed_until
-            ):
+                and pygame.time.get_ticks() < self._pressed_until
+            )
+
+            if pressed:
                 image_rect = rect.move(
                     -self.menu_art_rect.x,
                     -self.menu_art_rect.y
@@ -437,20 +456,15 @@ class MenuScene:
 
                 self.ui_layer.blit(
                     button_image,
-                    button_image.get_rect(
-                        center=rect.center
-                    )
+                    button_image.get_rect(center=rect.center)
                 )
-
             else:
                 self.ui_layer.blit(
                     image,
                     self.menu_art_rect
                 )
 
-        self.ui_layer.set_alpha(
-            round(255 * alpha)
-        )
+        self.ui_layer.set_alpha(round(255 * alpha))
 
         target.blit(
             self.ui_layer,
@@ -473,8 +487,11 @@ class MenuScene:
             < self._music_pressed_until
         )
 
-        # Keep the button's proportions during hover and click.
-        scale = 0.94 if pressed else 1.06 if hovered else 1.0
+        scale = (
+            0.94 if pressed
+            else 1.06 if hovered
+            else 1.0
+        )
 
         if scale != 1.0:
             image = pygame.transform.smoothscale(
@@ -485,14 +502,9 @@ class MenuScene:
                 )
             )
 
-        image_rect = image.get_rect(
-            center=rect.center
-        )
+        image_rect = image.get_rect(center=rect.center)
 
-        self.ui_layer.blit(
-            image,
-            image_rect
-        )
+        self.ui_layer.blit(image, image_rect)
 
     def compose_scene(self, open_amount):
         key = round(open_amount, 3)
@@ -524,7 +536,6 @@ class MenuScene:
         if left_width == self.left_rect.width:
             left_image = self.left_gate
             right_image = self.right_gate
-
         else:
             left_image = pygame.transform.smoothscale(
                 self.left_gate,
@@ -707,9 +718,11 @@ class GateScene:
         self.game = game
         self.menu_scene = menu_scene
         self.covered = False
+
         self.gate_open_sound = pygame.mixer.Sound(
             str(Path("ASSET") / "MUSIC" / "gateopen.mp3")
         )
+
         self.gate_sound_played = False
         self.restart()
 
@@ -743,8 +756,12 @@ class GateScene:
 
         self.elapsed += delta_time
 
-        if not self.gate_sound_played and self.elapsed >= GATE_OPEN_DELAY + 0.4:
+        if (
+            not self.gate_sound_played
+            and self.elapsed >= GATE_OPEN_DELAY + 0.4
+        ):
             self.gate_sound_played = True
+
             if not self.game.menu_music.muted:
                 self.gate_open_sound.play()
 
