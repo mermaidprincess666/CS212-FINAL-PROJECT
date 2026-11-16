@@ -3,7 +3,7 @@
 
 import pygame
 
-from screens.characters import CharacterScene
+from screens.character import CharacterScene
 from screens.info import InfoScene
 from screens.introduction import IntroScene
 from screens.menu import GateScene, MenuScene

@@ -695,8 +695,15 @@ class IntroScene:
 
         pygame.draw.rect(
             bubble_surface,
-            (12, 12, 14, 245),
+            (247, 233, 209),  # #F7E9D1 dialogue background
             bubble_surface.get_rect(),
+            border_radius=ui(17)
+        )
+        pygame.draw.rect(
+            bubble_surface,
+            (123, 86, 66),  # #7B5642 dialogue border
+            bubble_surface.get_rect(),
+            width=ui(3),
             border_radius=ui(17)
         )
 
@@ -716,7 +723,7 @@ class IntroScene:
             rendered = font.render(
                 line,
                 True,
-                WHITE
+                (123, 86, 66)
             )
 
             bubble_surface.blit(
@@ -777,7 +784,7 @@ class IntroScene:
             indicator = self.label_font.render(
                 "▼",
                 True,
-                WHITE
+                (123, 86, 66)
             )
 
             target.blit(
@@ -814,7 +821,7 @@ class IntroScene:
             target, (125, 88, 69), key_rect, ui(2),
             border_radius=ui(6)
         )
-        space_label = self.guide_font.render("SPACE", True, dark_bg)
+        space_label = self.guide_font.render("SPACE", True, (123, 86, 66))
         target.blit(space_label, space_label.get_rect(center=key_rect.center))
 
         x = key_rect.right + gap

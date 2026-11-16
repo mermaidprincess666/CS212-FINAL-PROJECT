@@ -87,6 +87,28 @@ class CharacterScene:
             "arrow", ui(80), game.fonts["title"]
         )
 
+        # Sound played when switching characters with < or >.
+        self.select_sound = None
+        sound_path = ASSETS_DIR / "MUSIC" / "select.mp3"
+        if pygame.mixer.get_init():
+            try:
+                self.select_sound = pygame.mixer.Sound(str(sound_path))
+                self.select_sound.set_volume(0.7)
+            except (OSError, pygame.error) as error:
+                print(f"Could not load character selection sound: {error}")
+
+        # Looping background music for the character selection screen.
+        # Use a separate mixer channel so select.mp3 can play over it.
+        self.background_music = None
+        self.background_channel = None
+        music_path = ASSETS_DIR / "MUSIC" / "music bg.mp3"
+        if pygame.mixer.get_init():
+            try:
+                self.background_music = pygame.mixer.Sound(str(music_path))
+                self.background_music.set_volume(0.35)
+            except (OSError, pygame.error) as error:
+                print(f"Could not load character selection music: {error}")
+
         self.selected_index = 0
         self.elapsed = 0.0
         self.transition_time = 0.0
@@ -228,6 +250,11 @@ class CharacterScene:
         self.selected_index = index
         self.confirmed = False
 
+        if self.select_sound is not None and not getattr(
+            self.game.menu_music, "muted", False
+        ):
+            self.select_sound.play()
+
     def _confirm(self):
         self.game.selected_character = dict(
             CHARACTERS[self.selected_index]
@@ -235,7 +262,13 @@ class CharacterScene:
         self.confirmed = True
 
     def _back(self):
+        self._stop_background_music()
         self.game.scene_manager.go_to("intro")
+
+    def _stop_background_music(self):
+        if self.background_channel is not None:
+            self.background_channel.stop()
+            self.background_channel = None
 
     def _current_character_surface(self):
         base, _, _ = self._large_surfaces[
@@ -244,6 +277,15 @@ class CharacterScene:
         return base
 
     def update(self, delta_time):
+        # Start once when this scene becomes active; loop until leaving.
+        if self.background_music is not None:
+            if self.background_channel is None or not self.background_channel.get_busy():
+                self.background_channel = self.background_music.play(loops=-1)
+
+            if self.background_channel is not None:
+                muted = getattr(self.game.menu_music, "muted", False)
+                self.background_channel.set_volume(0.0 if muted else 1.0)
+
         self.elapsed += delta_time
 
         self.transition_time = max(
