@@ -45,15 +45,18 @@ CAT_MAX_HEIGHT = 455
 CAT_TARGET_CENTER_X = 0.54
 CAT_BOTTOM_MARGIN = 165
 CAT_WALK_DURATION = 3.6
-CAT_ORDER_TEXT = "Meow! One Hawaiian pizza, please!"
+CAT_ORDER_TEXT = "Meow! One cheese pizza, please!"
 CAT_ORDER_CHEF_TEXT = (
-    "Our first customer ordered a Hawaiian pizza! "
-    "That's ham and pineapple on one delicious pizza. "
+    "Our first customer ordered a cheese pizza! "
+    "That's tomato sauce and cheese on one delicious pizza. "
     "Press Okay to accept the order, Chef!"
 )
+ORDER_REWARD = 50
+REGISTER_OPEN_DURATION = 1.8
+ORDER_PIZZA_WIDTH = 130
 
 # Customer patience: 60 real seconds = two in-game hours.
-CUSTOMER_WAIT_SECONDS = 60.0
+CUSTOMER_WAIT_SECONDS = 100.0
 PATIENCE_BAR_WIDTH = 170
 PATIENCE_BAR_HEIGHT = 20
 PATIENCE_BAR_HEAD_GAP = 42
@@ -64,7 +67,7 @@ PATIENCE_TUTORIAL_TEXT = (
     "So don't keep them waiting too long!"
 )
 KITCHEN_NAV_TUTORIAL_TEXT = (
-    "Time to make that Hawaiian pizza! See the controls "
+    "Time to make that cheese pizza! See the controls "
     "at the bottom-right? Press D to go to the Kitchen. "
     "Go ahead, Chef, give it a try!"
 )
@@ -113,8 +116,10 @@ class WelcomeScene:
             ASSETS_DIR / "MAIN" / "counter.png"
         )
         self.register = self._load_register()
+        self.open_register = self._load_register("cregister_open.png")
         self.tutorial_chef = self._load_tutorial_chef()
         self.cat = self._load_cat()
+        self.cheese_pizza = self._load_order_pizza()
 
         # Flow: welcome -> cat walks in alone -> chef explains the order
         # -> chef stays for patience and navigation lessons -> gameplay
@@ -126,7 +131,10 @@ class WelcomeScene:
         self.current_order = None
         self.customer_wait_started_at = None
         self.customer_angry = False
+        self.customer_served = False
         self.order_status = "waiting"
+        self.register_open_timer = 0.0
+        self.reward_display_timer = 0.0
         self.cat_angry = None
         if self.cat is not None:
             self.cat_angry = self.cat.copy()
@@ -141,6 +149,16 @@ class WelcomeScene:
 
         if self.counter is not None:
             self.counter = self._resize_width(self.counter, WIDTH)
+        self.cat_mask = (
+            pygame.mask.from_surface(self.cat, 10)
+            if self.cat is not None
+            else None
+        )
+        self.counter_mask = (
+            pygame.mask.from_surface(self.counter, 10)
+            if self.counter is not None
+            else None
+        )
 
         # Keep a dark copy of the counter for tutorial scenes.
         # The chef will be drawn in front of this layer.
@@ -153,6 +171,10 @@ class WelcomeScene:
         if self.register is not None:
             self.register = self._resize_width(
                 self._crop(self.register), ui(REGISTER_WIDTH)
+            )
+        if self.open_register is not None:
+            self.open_register = self._resize_width(
+                self._crop(self.open_register), ui(REGISTER_WIDTH)
             )
 
         # The register always sits above the counter, even when dimmed.
@@ -172,6 +194,7 @@ class WelcomeScene:
         self.label_font = self._font(ui(20), "label")
         self.guide_font = self._font(ui(16), "small")
         self.patience_font = self._font(ui(15), "small")
+        self.reward_font = self._font(ui(30), "label")
 
         self.popup_x = ui(440)
         self.popup_y = ui(175)
@@ -221,11 +244,11 @@ class WelcomeScene:
             print(f"Could not load {path}: {error}")
             return None
 
-    def _load_register(self):
-        """Load cash register from either existing asset location."""
+    def _load_register(self, filename="cregister_close.png"):
+        """Load cash register artwork from either existing asset location."""
         paths = [
-            ASSETS_DIR / "cregister_close.png",
-            ASSETS_DIR / "MAIN" / "cregister_close.png",
+            ASSETS_DIR / filename,
+            ASSETS_DIR / "MAIN" / filename,
         ]
         for path in paths:
             if path.is_file():
@@ -234,6 +257,27 @@ class WelcomeScene:
                     return image
         print("Cash register image not found.")
         return None
+
+    def _load_order_pizza(self):
+        """Load the cheese pizza shown with the customer's order."""
+        image = self._load_image(
+            ASSETS_DIR / "KITCHEN" / "COOKED CHEESE PIZZA FINAL.png"
+        )
+        if image is None:
+            return None
+
+        image = self._crop(image)
+        scale = min(
+            ui(ORDER_PIZZA_WIDTH) / image.get_width(),
+            ui(ORDER_PIZZA_WIDTH) / image.get_height(),
+        )
+        return pygame.transform.smoothscale(
+            image,
+            (
+                max(1, round(image.get_width() * scale)),
+                max(1, round(image.get_height() * scale)),
+            ),
+        )
 
     def _crop(self, image):
         """Remove transparent margins without stretching the artwork."""
@@ -394,8 +438,45 @@ class WelcomeScene:
         return self.counter.get_rect(midbottom=(WIDTH // 2, HEIGHT))
 
     def _draw_register(self, target):
-        if self.register is not None:
-            target.blit(self.register, self._register_rect())
+        image = (
+            self.open_register
+            if self.register_open_timer > 0
+            and self.open_register is not None
+            else self.register
+        )
+        if image is not None:
+            target.blit(
+                image,
+                image.get_rect(
+                    bottomright=(
+                        WIDTH - ui(REGISTER_RIGHT_MARGIN),
+                        HEIGHT - ui(REGISTER_BOTTOM_MARGIN),
+                    )
+                ),
+            )
+
+    def _draw_reward(self, target):
+        """Show the one-time order payment above the cash register."""
+        if self.reward_display_timer <= 0:
+            return
+
+        register_rect = self._register_rect()
+        if register_rect is None:
+            return
+
+        label = self.reward_font.render(f"+{ORDER_REWARD}", True, (74, 128, 72))
+        panel = pygame.Rect(
+            0, 0, label.get_width() + ui(24), label.get_height() + ui(12)
+        )
+        panel.midbottom = (
+            register_rect.centerx,
+            register_rect.top - ui(10),
+        )
+        pygame.draw.rect(target, CREAM, panel, border_radius=ui(10))
+        pygame.draw.rect(
+            target, (74, 128, 72), panel, ui(2), border_radius=ui(10)
+        )
+        target.blit(label, label.get_rect(center=panel.center))
 
     def _draw_register_highlight(self, target):
         if self.register is None:
@@ -494,18 +575,18 @@ class WelcomeScene:
         )
 
     def _accept_cat_order(self):
-        """Accept Hawaiian pizza and continue with the chef in place."""
+        """Accept the cheese pizza order and continue with the chef in place."""
         if self.phase != "cat_order":
             return
 
-        self.current_order = "Hawaiian"
+        self.current_order = "Cheese"
         self.order_status = "waiting"
         # Keep the chef standing here. Continue directly with the
         # patience lesson instead of sliding out and back in.
         self.phase = "patience_intro"
         self.show_tutorial_popup = True
         self._set_chef_dialogue(PATIENCE_TUTORIAL_TEXT, slide_in=False)
-        print("First customer order accepted: Hawaiian pizza")
+        print("First customer order accepted: Cheese pizza")
 
     def _finish_patience_intro(self):
         """Teach the D key after explaining customer patience."""
@@ -550,6 +631,7 @@ class WelcomeScene:
         if (
             self.phase == "playing"
             and self.current_order is not None
+            and not self.customer_served
             and not self.customer_angry
             and self._patience_remaining() <= 0
         ):
@@ -570,6 +652,57 @@ class WelcomeScene:
 
     def _clicked(self, event_pos, rectangle):
         return any(rectangle.collidepoint(p) for p in self._mouse_positions(event_pos))
+
+    def _order_ready(self):
+        """Check the shared oven state before allowing the customer to be served."""
+        manager = getattr(self.game, "scene_manager", None)
+        oven = manager.scenes.get("oven") if manager is not None else None
+        return (
+            self.current_order == "Cheese"
+            and getattr(oven, "oven_state", None) == "cooked"
+        )
+
+    def _clicked_customer(self, event_pos):
+        """Hit only visible customer pixels, excluding the foreground counter."""
+        rect = self._cat_rect()
+        if rect is None or self.cat_mask is None:
+            return False
+
+        counter_rect = self._counter_rect()
+        for point in self._mouse_positions(event_pos):
+            if not rect.collidepoint(point):
+                continue
+            local = (point[0] - rect.x, point[1] - rect.y)
+            if not self.cat_mask.get_at(local):
+                continue
+            if (
+                counter_rect is not None
+                and self.counter_mask is not None
+                and counter_rect.collidepoint(point)
+                and self.counter_mask.get_at(
+                    (point[0] - counter_rect.x, point[1] - counter_rect.y)
+                )
+            ):
+                continue
+            return True
+        return False
+
+    def _serve_customer(self, event_pos):
+        """Serve the ready order once when the customer is clicked."""
+        if (
+            self.phase != "playing"
+            or self.customer_served
+            or not self._order_ready()
+            or not self._clicked_customer(event_pos)
+        ):
+            return
+
+        self.customer_served = True
+        self.customer_angry = False
+        self.order_status = "served"
+        self.register_open_timer = REGISTER_OPEN_DURATION
+        self.reward_display_timer = REGISTER_OPEN_DURATION
+        print(f"Cheese pizza served: +{ORDER_REWARD}")
 
     def _okay_rect(self, bubble):
         """Place the response directly underneath the speaker's bubble."""
@@ -621,6 +754,10 @@ class WelcomeScene:
                     self._finish_patience_intro()
                 return
 
+            if self.phase == "playing":
+                self._serve_customer(event.pos)
+                return
+
         if event.type != pygame.KEYDOWN:
             return
 
@@ -661,6 +798,12 @@ class WelcomeScene:
 
     def update(self, delta_time):
         """Animate the arriving customer and the chef's guided lessons."""
+        self.register_open_timer = max(
+            0.0, self.register_open_timer - delta_time
+        )
+        self.reward_display_timer = max(
+            0.0, self.reward_display_timer - delta_time
+        )
         if self.phase in ("chef_exit", "navigation_exit"):
             self.chef_exit_timer = min(
                 CHEF_EXIT_DURATION,
@@ -739,6 +882,7 @@ class WelcomeScene:
         # Cash register and clock are always ABOVE the counter.
         self._draw_register(target)
         self.game.scene_manager.shop_clock.draw(target)
+        self._draw_reward(target)
 
         if self.phase in ("chef", "chef_exit"):
             self._draw_tutorial(target)
@@ -747,7 +891,8 @@ class WelcomeScene:
         elif self.phase in ("patience_intro", "navigation_intro", "navigation_exit"):
             self._draw_patience_tutorial(target)
         elif self.phase == "playing":
-            self._draw_patience_bar(target)
+            if not self.customer_served:
+                self._draw_patience_bar(target)
             if self.customer_angry:
                 self._draw_angry_message(target)
             self._draw_controls(target)
@@ -1078,19 +1223,24 @@ class WelcomeScene:
         return rect
 
     def _cat_bubble_rect(self):
-        """Bubble above the counter when the cat reaches the center."""
-        width = min(ui(465), WIDTH - ui(80))
-        lines = self._wrap_text(CAT_ORDER_TEXT, self.label_font, width - ui(36))
-        height = ui(82) + len(lines) * (self.label_font.get_linesize() + ui(4))
+        """Place the order, including its pizza, immediately above the cat."""
+        width = min(ui(540), WIDTH - ui(80))
+        height = ui(150)
+        cat_rect = self._cat_rect()
+        bubble_bottom = (
+            cat_rect.top - ui(14)
+            if cat_rect is not None
+            else ui(385)
+        )
         return pygame.Rect(
-            round(WIDTH * CAT_TARGET_CENTER_X) - width // 2,
-            ui(88),
+            round(self.cat_center_x) - width // 2,
+            max(ui(24), bubble_bottom - height),
             width,
             height,
         )
 
     def _draw_cat_order(self, target, bubble):
-        """Display the first customer's Hawaiian pizza request."""
+        """Display the cheese pizza requested by the first customer."""
         pygame.draw.rect(
             target, (91, 58, 44), bubble.move(0, ui(3)),
             border_radius=ui(15),
@@ -1104,13 +1254,24 @@ class WelcomeScene:
 
         title = self.guide_font.render("CUSTOMER ORDER", True, BROWN)
         target.blit(title, (bubble.x + ui(18), bubble.y + ui(12)))
-        pizza = self.popup_font.render("HAWAIIAN PIZZA", True, BROWN)
-        target.blit(pizza, (bubble.x + ui(18), bubble.y + ui(33)))
+        pizza_name = self.popup_font.render("CHEESE PIZZA", True, BROWN)
+        target.blit(pizza_name, (bubble.x + ui(18), bubble.y + ui(34)))
 
-        line_y = bubble.y + ui(72)
-        for line in self._wrap_text(
-            CAT_ORDER_TEXT, self.label_font, bubble.width - ui(36)
-        ):
+        pizza_rect = None
+        if self.cheese_pizza is not None:
+            pizza_rect = self.cheese_pizza.get_rect(
+                midright=(bubble.right - ui(18), bubble.centery)
+            )
+            target.blit(self.cheese_pizza, pizza_rect)
+
+        text_right = (
+            pizza_rect.left - ui(14)
+            if pizza_rect is not None
+            else bubble.right - ui(18)
+        )
+        text_width = max(ui(160), text_right - bubble.x - ui(18))
+        line_y = bubble.y + ui(77)
+        for line in self._wrap_text(CAT_ORDER_TEXT, self.label_font, text_width):
             text = self.label_font.render(line, True, BROWN)
             target.blit(text, (bubble.x + ui(18), line_y))
             line_y += self.label_font.get_linesize() + ui(4)

@@ -83,7 +83,7 @@ class IntroScene:
             game.fonts.get("small")
         )
 
-        # Deep speech-like gibberish voice; no audio file required.
+        # Generate the character voices without separate audio files.
         self.voice_rng = random.Random()
         self.voice_sounds = {}
         self.voice_channel = None
@@ -198,7 +198,7 @@ class IntroScene:
             print("Gibberish voice requires a signed 16-bit audio mixer.")
             return
 
-        # Reuse 15 short sounds rather than synthesizing 78 at startup.
+        # Reuse 15 sounds instead of generating all 78 at startup.
         vowels = {
             "a": (730, 1150, 2450),
             "e": (480, 1750, 2500),
@@ -217,7 +217,7 @@ class IntroScene:
                 samples = array("h")
                 phase = 0.0
                 noise_state = 13579 + variant * 41
-                # Calculate harmonic weights ONCE, not for every sample.
+                # Precalculate weights for each syllable.
                 weights = []
                 for harmonic in range(1, 11):
                     frequency = harmonic * pitch
@@ -273,7 +273,6 @@ class IntroScene:
             self._stop_narration()
             return
 
-        # Only make a sound when a new spoken character appears.
         new_characters = text[old_count:new_count]
         letters = [character.lower() for character in new_characters if character.isascii() and character.isalpha()]
         if not letters:
@@ -294,13 +293,11 @@ class IntroScene:
 
         self.voice_channel = sound.play()
         self.last_voice_time = now
-        # Variable spacing makes the voice feel like babbling, not a metronome.
+        # Random timing keeps the voice from sounding robotic.
         self.voice_delay = self.voice_rng.randint(42, 78)
 
     def _build_border(self, image, side):
-        """
-        Border follows the visible edge of the artwork.
-        """
+        """Build a border that follows the panel's visible edge."""
         width, height = image.get_size()
         mask = pygame.mask.from_surface(image, 20)
 
@@ -796,7 +793,6 @@ class IntroScene:
             )
 
     def _draw_navigation_guide(self, target):
-        """Compact bottom-left SPACE controls with a hold progress ring."""
         cream = (255, 238, 208)
         dark_bg = (39, 25, 23)
         accent = (245, 173, 104)

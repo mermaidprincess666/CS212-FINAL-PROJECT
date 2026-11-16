@@ -555,7 +555,7 @@ class KitchenScene:
             unsetcolor=(0, 0, 0, 0),
         )
 
-        thickness = max(3, ui(8))
+        thickness = max(4, ui(12))
 
         glow = pygame.Surface(
             (
@@ -801,10 +801,7 @@ class KitchenScene:
                 ) + 1
             ) / 2
 
-            alpha = (
-                245 if hovered
-                else round(165 + 40 * pulse)
-            )
+            alpha = 255 if hovered else round(200 + 55 * pulse)
 
             glow.set_alpha(alpha)
             target.blit(glow, pos)
@@ -814,7 +811,7 @@ class KitchenScene:
             and self.hover_images.get(name) is not None
         ):
             image = self.hover_images[name].copy()
-            image.set_alpha(180)
+            image.set_alpha(230)
 
             target.blit(image, (0, 0))
 
