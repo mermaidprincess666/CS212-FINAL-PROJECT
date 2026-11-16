@@ -27,6 +27,7 @@ from settings import (
     TITLE_WIDTH,
     TITLE_X,
     TITLE_Y,
+    ui,
     WIDTH,
 )
 
@@ -39,11 +40,11 @@ MENU_BUTTONS = (
 )
 
 PIZZA_SCALE = 0.8
-PIZZA_MARGIN = 20
+PIZZA_MARGIN = ui(20)
 LOGO_WIDTH_FACTOR = 2.4
-LOGO_OVERLAP = 80
-LOGO_TOP_MARGIN = 10
-LOGO_SIDE_MARGIN = 10
+LOGO_OVERLAP = ui(80)
+LOGO_TOP_MARGIN = ui(10)
+LOGO_SIDE_MARGIN = ui(10)
 CENTER_BIAS = 0.35
 
 
@@ -60,7 +61,9 @@ class MenuScene:
         )
 
         # Sound button
-        self.music_button_rect = pygame.Rect(24, 24, 67, 67)
+        self.music_button_rect = pygame.Rect(
+            ui(24), ui(24), ui(67), ui(67)
+        )
 
         self.sound_on_image = self._load_sound_button("sound.png")
         self.sound_off_image = self._load_sound_button("sound_m.png")

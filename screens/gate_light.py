@@ -32,6 +32,7 @@ from settings import (
     GATE_LIGHT_WANDER_SECONDARY,
     GATE_TRAIL_SAMPLES,
     HEIGHT,
+    ui,
     WIDTH,
 )
 
@@ -43,7 +44,7 @@ PHASE_SPENT = 3
 
 # Cached alpha variants avoid per-particle alpha updates.
 DUST_ALPHAS = (70, 130, 190, 235, 255)
-TRAIL_SIZES = (34, 28, 22, 17, 13, 9)
+TRAIL_SIZES = tuple(ui(size) for size in (34, 28, 22, 17, 13, 9))
 
 
 def make_glow(diameter, color, plateau=0.0):
@@ -101,10 +102,10 @@ class GateLight:
             ]
             # Larger warm sprites stand out against the cover.
             for size, color in (
-                (10, GATE_LIGHT_MID_COLOR),
-                (8, GATE_LIGHT_AURA_COLOR),
-                (18, GATE_LIGHT_AURA_COLOR),
-                (28, GATE_LIGHT_HALO_COLOR),
+                (ui(10), GATE_LIGHT_MID_COLOR),
+                (ui(8), GATE_LIGHT_AURA_COLOR),
+                (ui(18), GATE_LIGHT_AURA_COLOR),
+                (ui(28), GATE_LIGHT_HALO_COLOR),
             )
         ]
         self.trail = deque(maxlen=GATE_TRAIL_SAMPLES)
@@ -156,10 +157,14 @@ class GateLight:
         """Position on the wandering path, ``float_time`` seconds in."""
         offset_x, offset_y = GATE_LIGHT_WANDER_OFFSET
         centre_x = clamp(
-            gate_pos[0] + offset_x, GATE_LIGHT_WANDER_AMPLITUDE[0] + 60, WIDTH - 160
+            gate_pos[0] + offset_x,
+            GATE_LIGHT_WANDER_AMPLITUDE[0] + ui(60),
+            WIDTH - ui(160),
         )
         centre_y = clamp(
-            gate_pos[1] + offset_y, GATE_LIGHT_WANDER_AMPLITUDE[1] + 60, HEIGHT - 120
+            gate_pos[1] + offset_y,
+            GATE_LIGHT_WANDER_AMPLITUDE[1] + ui(60),
+            HEIGHT - ui(120),
         )
         amplitude_x, amplitude_y = GATE_LIGHT_WANDER_AMPLITUDE
         minor_x, minor_y = GATE_LIGHT_WANDER_SECONDARY

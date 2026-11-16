@@ -3,7 +3,7 @@
 
 import pygame
 
-from settings import WIDTH, HEIGHT, ASSETS_DIR
+from settings import WIDTH, HEIGHT, ASSETS_DIR, ui
 
 
 # SLICE color palette
@@ -32,30 +32,30 @@ class SettingsScreen:
         # Fonts
         self.title_font = self._load_font(
             "Lilita_One/LilitaOne-Regular.ttf",
-            40,
+            ui(40),
             game.fonts["title"]
         )
 
         self.label_font = self._load_font(
             "Nunito/static/Nunito-SemiBold.ttf",
-            21,
+            ui(21),
             game.fonts["label"]
         )
 
         self.button_font = self._load_font(
             "Fredoka/static/Fredoka-SemiBold.ttf",
-            20,
+            ui(20),
             game.fonts["button"]
         )
 
         self.small_font = self._load_font(
             "Nunito/static/Nunito-Regular.ttf",
-            18,
+            ui(18),
             game.fonts["small"]
         )
 
         # Narrower modal for the updated card
-        self.modal = pygame.Rect(0, 0, 680, 580)
+        self.modal = pygame.Rect(0, 0, ui(680), ui(580))
         self.modal.center = (WIDTH // 2, HEIGHT // 2)
 
         # Card image
@@ -82,31 +82,31 @@ class SettingsScreen:
         self.popup_active = False
 
         # Layout relative to 680x580 modal
-        self.content_left = 175
-        self.content_right = 505
-        self.content_center = 340
+        self.content_left = ui(175)
+        self.content_right = ui(505)
+        self.content_center = ui(340)
 
-        self.music_label_y = 162
-        self.sound_label_y = 259
+        self.music_label_y = ui(162)
+        self.sound_label_y = ui(259)
 
         self.music_slider = pygame.Rect(
-            175, 204, 330, 11
+            ui(175), ui(204), ui(330), ui(11)
         )
 
         self.sound_slider = pygame.Rect(
-            175, 301, 330, 11
+            ui(175), ui(301), ui(330), ui(11)
         )
 
         self.fullscreen_button = pygame.Rect(
-            175, 367, 330, 46
+            ui(175), ui(367), ui(330), ui(46)
         )
 
         self.reset_button = pygame.Rect(
-            175, 441, 155, 46
+            ui(175), ui(441), ui(155), ui(46)
         )
 
         self.back_button = pygame.Rect(
-            350, 441, 155, 46
+            ui(350), ui(441), ui(155), ui(46)
         )
 
         self.dragging = None
@@ -175,13 +175,13 @@ class SettingsScreen:
             mouse_pos = self._mouse_to_modal(event.pos)
 
             if self.music_slider.inflate(
-                20, 30
+                ui(20), ui(30)
             ).collidepoint(mouse_pos):
                 self.dragging = "music"
                 self.change_slider(mouse_pos)
 
             elif self.sound_slider.inflate(
-                20, 30
+                ui(20), ui(30)
             ).collidepoint(mouse_pos):
                 self.dragging = "sound"
                 self.change_slider(mouse_pos)
@@ -245,14 +245,14 @@ class SettingsScreen:
             self.sound_volume = volume
 
     def draw_slider(self, surface, slider, volume, mouse_pos):
-        hovered = slider.inflate(24, 30).collidepoint(mouse_pos)
+        hovered = slider.inflate(ui(24), ui(30)).collidepoint(mouse_pos)
 
         # Track
         pygame.draw.rect(
             surface,
             SLIDER_TRACK,
             slider,
-            border_radius=8
+            border_radius=ui(8)
         )
 
         # Green progress
@@ -270,7 +270,7 @@ class SettingsScreen:
                 surface,
                 SLIDER_HOVER if hovered else SLIDER_FILL,
                 fill_rect,
-                border_radius=8
+                border_radius=ui(8)
             )
 
         handle_x = slider.x + fill_width
@@ -280,7 +280,7 @@ class SettingsScreen:
             surface,
             (184, 169, 142),
             (handle_x, slider.centery + 2),
-            12
+            ui(12)
         )
 
         # Cream knob
@@ -288,7 +288,7 @@ class SettingsScreen:
             surface,
             SLIDER_KNOB,
             (handle_x, slider.centery),
-            11
+            ui(11)
         )
 
         # Green outline
@@ -296,15 +296,15 @@ class SettingsScreen:
             surface,
             SLIDER_HOVER if hovered else SLIDER_FILL,
             (handle_x, slider.centery),
-            11,
-            2
+            ui(11),
+            ui(2)
         )
 
         pygame.draw.circle(
             surface,
             SLIDER_FILL,
             (handle_x, slider.centery),
-            3
+            ui(3)
         )
 
     def draw_button(
@@ -336,8 +336,8 @@ class SettingsScreen:
         pygame.draw.rect(
             surface,
             (196, 151, 119),
-            rect.move(0, 3),
-            border_radius=12
+            rect.move(0, ui(3)),
+            border_radius=ui(12)
         )
 
         # Button
@@ -345,15 +345,15 @@ class SettingsScreen:
             surface,
             fill,
             rect,
-            border_radius=12
+            border_radius=ui(12)
         )
 
         pygame.draw.rect(
             surface,
             DARK_BROWN,
             rect,
-            2,
-            border_radius=12
+            ui(2),
+            border_radius=ui(12)
         )
 
         text_surface = self.button_font.render(
@@ -405,7 +405,7 @@ class SettingsScreen:
         )
 
         title_rect = title.get_rect(
-            center=(340, 90)
+            center=(ui(340), ui(90))
         )
 
         surface.blit(title, title_rect)

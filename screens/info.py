@@ -7,6 +7,7 @@ from settings import (
     BACKGROUND,
     HEIGHT,
     TITLE_COLOR,
+    ui,
     WIDTH,
 )
 
@@ -26,7 +27,9 @@ class InfoScene:
         self.title_font = game.fonts["title"]
         self.body_font = game.fonts["button"]
         self.button_font = game.fonts["small"]
-        self.back_button = pygame.Rect(40, HEIGHT - 60, 140, 40)
+        self.back_button = pygame.Rect(
+            ui(40), HEIGHT - ui(60), ui(140), ui(40)
+        )
 
     def handle_event(self, event):
         """Send Back to this page's configured ``back_target``."""
@@ -48,7 +51,7 @@ class InfoScene:
             self.heading,
             self.title_font,
             TITLE_COLOR,
-            (WIDTH // 2, 100),
+            (WIDTH // 2, ui(100)),
         )
         for line_index, line in enumerate(self.lines):
             draw_text_center(
@@ -56,6 +59,6 @@ class InfoScene:
                 line,
                 self.body_font,
                 TITLE_COLOR,
-                (WIDTH // 2, 200 + line_index * 40),
+                (WIDTH // 2, ui(200 + line_index * 40)),
             )
         draw_button(target, self.back_button, "BACK", mouse_pos, self.button_font)

@@ -4,7 +4,7 @@
 import pygame
 
 from screens.common import draw_text_center
-from settings import WIDTH, HEIGHT, CREAM, TITLE_COLOR
+from settings import WIDTH, HEIGHT, CREAM, TITLE_COLOR, ui
 
 
 DARK_BROWN = (63, 43, 35)
@@ -40,17 +40,17 @@ class ThoughtsScene:
         self.finished_typing = False
 
         self.next_button = pygame.Rect(
-            WIDTH - 190,
-            HEIGHT - 82,
-            145,
-            43,
+            WIDTH - ui(190),
+            HEIGHT - ui(82),
+            ui(145),
+            ui(43),
         )
 
         self.dialogue_box = pygame.Rect(
-            55,
-            HEIGHT - 185,
-            WIDTH - 110,
-            150,
+            ui(55),
+            HEIGHT - ui(185),
+            WIDTH - ui(110),
+            ui(150),
         )
 
     def handle_event(self, event):
@@ -104,36 +104,36 @@ class ThoughtsScene:
             "A NEW BEGINNING",
             self.game.fonts["title"],
             TITLE_COLOR,
-            (WIDTH // 2, 65),
+            (WIDTH // 2, ui(65)),
         )
 
         pygame.draw.rect(
             target,
             PANEL_CREAM,
             self.dialogue_box,
-            border_radius=16,
+            border_radius=ui(16),
         )
 
         pygame.draw.rect(
             target,
             DARK_BROWN,
             self.dialogue_box,
-            3,
-            border_radius=16,
+            ui(3),
+            border_radius=ui(16),
         )
 
         name_box = pygame.Rect(
-            85,
-            HEIGHT - 207,
-            145,
-            38,
+            ui(85),
+            HEIGHT - ui(207),
+            ui(145),
+            ui(38),
         )
 
         pygame.draw.rect(
             target,
             TERRACOTTA,
             name_box,
-            border_radius=9,
+            border_radius=ui(9),
         )
 
         draw_text_center(
@@ -152,9 +152,9 @@ class ThoughtsScene:
             displayed_text,
             self.dialogue_font,
             DARK_BROWN,
-            95,
-            HEIGHT - 155,
-            WIDTH - 190,
+            ui(95),
+            HEIGHT - ui(155),
+            WIDTH - ui(190),
         )
 
         hovered = self.next_button.collidepoint(mouse_pos)
@@ -169,7 +169,7 @@ class ThoughtsScene:
             target,
             button_color,
             self.next_button,
-            border_radius=9,
+            border_radius=ui(9),
         )
 
         button_label = (
@@ -214,4 +214,4 @@ class ThoughtsScene:
 
         for index, line in enumerate(lines):
             rendered = font.render(line, True, color)
-            target.blit(rendered, (x, y + index * 30))
+            target.blit(rendered, (x, y + index * ui(30)))

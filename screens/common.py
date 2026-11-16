@@ -2,7 +2,7 @@
 
 import pygame
 
-from settings import BUTTON_BORDER, BUTTON_COLOR, BUTTON_HOVER, WHITE
+from settings import BUTTON_BORDER, BUTTON_COLOR, BUTTON_HOVER, WHITE, ui
 
 
 def ease(progress):
@@ -26,6 +26,6 @@ def draw_text_center(target, text, font, color, center, alpha=255):
 def draw_button(target, rect, text, mouse_pos, font):
     """Draw a menu button, darkening while the pointer sits on it."""
     color = BUTTON_HOVER if rect.collidepoint(mouse_pos) else BUTTON_COLOR
-    pygame.draw.rect(target, color, rect, border_radius=12)
-    pygame.draw.rect(target, BUTTON_BORDER, rect, 3, border_radius=12)
+    pygame.draw.rect(target, color, rect, border_radius=ui(12))
+    pygame.draw.rect(target, BUTTON_BORDER, rect, ui(3), border_radius=ui(12))
     draw_text_center(target, text, font, WHITE, rect.center)

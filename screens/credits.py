@@ -3,7 +3,7 @@
 
 import pygame
 
-from settings import WIDTH, HEIGHT, ASSETS_DIR
+from settings import WIDTH, HEIGHT, ASSETS_DIR, ui
 
 
 # SLICE color palette
@@ -23,36 +23,36 @@ class CreditsScreen:
         # Fonts
         self.title_font = self._load_font(
             "Lilita_One/LilitaOne-Regular.ttf",
-            50,
+            ui(50),
             game.fonts["title"]
         )
 
         self.heading_font = self._load_font(
             "Fredoka/static/Fredoka-SemiBold.ttf",
-            29,
+            ui(29),
             game.fonts["label"]
         )
 
         self.name_font = self._load_font(
             "Nunito/static/Nunito-Regular.ttf",
-            26,
+            ui(26),
             game.fonts["small"]
         )
 
         self.subtitle_font = self._load_font(
             "Nunito/static/Nunito-SemiBold.ttf",
-            20,
+            ui(20),
             game.fonts["small"]
         )
 
         self.button_font = self._load_font(
             "Fredoka/static/Fredoka-SemiBold.ttf",
-            23,
+            ui(23),
             game.fonts["button"]
         )
 
         # Credits card
-        self.modal = pygame.Rect(0, 0, 960, 540)
+        self.modal = pygame.Rect(0, 0, ui(960), ui(540))
         self.modal.center = (WIDTH // 2, HEIGHT // 2)
 
         self.credits_bg = pygame.image.load(
@@ -79,17 +79,17 @@ class CreditsScreen:
 
         # Credits viewing area
         self.scroll_area = pygame.Rect(
-            135, 190, 690, 245
+            ui(135), ui(190), ui(690), ui(245)
         )
 
         # Automatic upward scrolling
-        self.scroll_speed = 35.0
+        self.scroll_speed = ui(35.0)
         self.scroll_position = 0.0
         self.content_height = 0
 
         # Back button
         self.back_button = pygame.Rect(
-            380, 455, 200, 45
+            ui(380), ui(455), ui(200), ui(45)
         )
 
         # Credits content
@@ -198,12 +198,12 @@ class CreditsScreen:
     def _calculate_content_height(self):
         """Calculate total credits height."""
 
-        total_height = 20
+        total_height = ui(20)
 
         for heading, names in self.credits:
-            total_height += 55
-            total_height += len(names) * 42
-            total_height += 32
+            total_height += ui(55)
+            total_height += len(names) * ui(42)
+            total_height += ui(32)
 
         self.content_height = total_height
 
@@ -299,8 +299,8 @@ class CreditsScreen:
         pygame.draw.rect(
             surface,
             (196, 151, 119),
-            rect.move(0, 3),
-            border_radius=12
+            rect.move(0, ui(3)),
+            border_radius=ui(12)
         )
 
         # Button background
@@ -308,7 +308,7 @@ class CreditsScreen:
             surface,
             color,
             rect,
-            border_radius=12
+            border_radius=ui(12)
         )
 
         # Button outline
@@ -316,8 +316,8 @@ class CreditsScreen:
             surface,
             DARK_BROWN,
             rect,
-            2,
-            border_radius=12
+            ui(2),
+            border_radius=ui(12)
         )
 
         text_surface = self.button_font.render(
@@ -342,7 +342,7 @@ class CreditsScreen:
         center_x = self.scroll_area.width // 2
 
         # Start at original position and move upward
-        y = 20 - self.scroll_position
+        y = ui(20) - self.scroll_position
 
         for heading, names in self.credits:
             # Section heading
@@ -362,7 +362,7 @@ class CreditsScreen:
                 heading_rect
             )
 
-            y += 55
+            y += ui(55)
 
             # Names
             for name in names:
@@ -382,9 +382,9 @@ class CreditsScreen:
                     name_rect
                 )
 
-                y += 42
+                y += ui(42)
 
-            y += 32
+            y += ui(32)
 
         surface.blit(
             scroll_surface,
@@ -407,7 +407,7 @@ class CreditsScreen:
 
         surface.blit(
             title,
-            title.get_rect(center=(480, 82))
+            title.get_rect(center=(ui(480), ui(82)))
         )
 
         # Subtitle
@@ -419,7 +419,7 @@ class CreditsScreen:
 
         surface.blit(
             subtitle,
-            subtitle.get_rect(center=(480, 155))
+            subtitle.get_rect(center=(ui(480), ui(155)))
         )
 
         # Animated credits

@@ -19,6 +19,7 @@ from settings import (
     GATE_FADE_START,
     GATE_TOTAL_TIME,
     POP_LENGTH,
+    ui,
 )
 
 
@@ -79,7 +80,7 @@ class SceneFlowTests(unittest.TestCase):
         music = self.game.menu_music
         menu = manager.scenes["menu"]
 
-        self.assertEqual(menu.music_button_rect.topleft, (24, 24))
+        self.assertEqual(menu.music_button_rect.topleft, (ui(24), ui(24)))
         self.assertFalse(music.muted)
 
         with patch.object(pygame.mixer.music, "play") as play, patch.object(
@@ -155,7 +156,7 @@ class SceneFlowTests(unittest.TestCase):
         scene = self.game.scene_manager.scenes["character"]
 
         for idle, talking, hands in scene._large_surfaces:
-            self.assertEqual(idle.get_size(), (960, 540))
+            self.assertEqual(idle.get_size(), (1536, 864))
             self.assertEqual(talking.get_size(), idle.get_size())
             self.assertEqual(hands.get_size(), idle.get_size())
 

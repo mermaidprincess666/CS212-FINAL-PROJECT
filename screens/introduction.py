@@ -4,7 +4,7 @@ from array import array
 import sys
 import pygame
 
-from settings import WIDTH, HEIGHT, ASSETS_DIR
+from settings import WIDTH, HEIGHT, ASSETS_DIR, ui
 
 
 BLACK = (0, 0, 0)
@@ -19,11 +19,10 @@ SLIDE_DURATION = 0.85
 TYPE_SPEED = 45
 
 PANEL_BORDER_COLOR = (91, 28, 27)
-PANEL_BORDER_WIDTH = 20
-PANEL_STRAIGHT_BORDER_WIDTH = 12
-
-PAIR_GAP = 20
-MERGE_GAP = 8
+PANEL_BORDER_WIDTH = ui(20)
+PANEL_STRAIGHT_BORDER_WIDTH = ui(12)
+PAIR_GAP = ui(20)
+MERGE_GAP = ui(8)
 
 
 STORY = [
@@ -68,19 +67,19 @@ class IntroScene:
 
         self.dialogue_font = self._load_font(
             "Fredoka/static/Fredoka-SemiBold.ttf",
-            28,
+            ui(28),
             game.fonts.get("dialogue")
         )
 
         self.label_font = self._load_font(
             "Fredoka/static/Fredoka-SemiBold.ttf",
-            20,
+            ui(20),
             game.fonts.get("label")
         )
 
         self.button_font = self._load_font(
             "Fredoka/static/Fredoka-SemiBold.ttf",
-            21,
+            ui(21),
             game.fonts.get("small")
         )
 
@@ -169,7 +168,7 @@ class IntroScene:
         self.space_skip_triggered = False
         self.hold_to_skip_ms = 1000
         self.guide_font = self._load_font(
-            "Fredoka/static/Fredoka-SemiBold.ttf", 14, self.button_font
+            "Fredoka/static/Fredoka-SemiBold.ttf", ui(14), self.button_font
         )
 
         self.reset()
@@ -638,12 +637,12 @@ class IntroScene:
         _, _, text = STORY[self.index]
 
         font = self.dialogue_font
-        max_width = HALF - 40
+        max_width = HALF - ui(40)
 
         full_lines = self._wrap_text(
             text,
             font,
-            max_width - 48
+            max_width - ui(48)
         )
 
         line_height = (
@@ -651,19 +650,19 @@ class IntroScene:
         )
 
         bubble_width = max(
-            220,
+            ui(220),
             min(
                 max_width,
                 max(
                     font.size(line)[0]
                     for line in full_lines
-                ) + 48
+                ) + ui(48)
             )
         )
 
         bubble_height = (
             len(full_lines) * line_height
-            + 44
+            + ui(44)
         )
 
         rx, ry = self.bubble_positions[
@@ -676,18 +675,18 @@ class IntroScene:
         y = int(HEIGHT * ry)
 
         x = max(
-            HALF + 10,
+            HALF + ui(10),
             min(
                 x,
-                WIDTH - bubble_width - 20
+                WIDTH - bubble_width - ui(20)
             )
         )
 
         y = max(
-            45,
+            ui(45),
             min(
                 y,
-                HEIGHT - bubble_height - 75
+                HEIGHT - bubble_height - ui(75)
             )
         )
 
@@ -700,7 +699,7 @@ class IntroScene:
             bubble_surface,
             (12, 12, 14, 245),
             bubble_surface.get_rect(),
-            border_radius=17
+            border_radius=ui(17)
         )
 
         visible_text = text[
@@ -710,10 +709,10 @@ class IntroScene:
         visible_lines = self._wrap_text(
             visible_text,
             font,
-            max_width - 48
+            max_width - ui(48)
         )
 
-        text_y = 20
+        text_y = ui(20)
 
         for line in visible_lines:
             rendered = font.render(
@@ -724,7 +723,7 @@ class IntroScene:
 
             bubble_surface.blit(
                 rendered,
-                (24, text_y)
+                (ui(24), text_y)
             )
 
             text_y += line_height
@@ -770,8 +769,8 @@ class IntroScene:
         )
 
         if self.characters_shown >= len(text):
-            bounce = int(
-                3 * math.sin(
+            bounce = round(
+                ui(3) * math.sin(
                     pygame.time.get_ticks()
                     * 0.008
                 )
@@ -786,8 +785,8 @@ class IntroScene:
             target.blit(
                 indicator,
                 (
-                    bubble_rect.right - 30,
-                    bubble_rect.bottom - 27 + bounce
+                    bubble_rect.right - ui(30),
+                    bubble_rect.bottom - ui(27) + bounce
                 )
             )
 
@@ -797,21 +796,26 @@ class IntroScene:
         dark_bg = (39, 25, 23)
         accent = (245, 173, 104)
 
-        key_width, key_height = 66, 27
-        circle_size = 28
-        gap = 9
-        divider_gap = 15
-        x = 16
-        center_y = HEIGHT - 24
+        key_width, key_height = ui(66), ui(27)
+        circle_size = ui(28)
+        gap = ui(9)
+        divider_gap = ui(15)
+        x = ui(16)
+        center_y = HEIGHT - ui(24)
 
         next_text = self.guide_font.render("Next", True, cream)
         hold_text = self.guide_font.render("Hold to skip", True, cream)
 
-        # Small keyboard SPACE icon.
         key_rect = pygame.Rect(x, center_y - key_height // 2, key_width, key_height)
-        pygame.draw.rect(target, (103, 73, 60), key_rect.move(0, 2), border_radius=6)
-        pygame.draw.rect(target, (249, 235, 211), key_rect, border_radius=6)
-        pygame.draw.rect(target, (125, 88, 69), key_rect, 2, border_radius=6)
+        pygame.draw.rect(
+            target, (103, 73, 60), key_rect.move(0, ui(2)),
+            border_radius=ui(6)
+        )
+        pygame.draw.rect(target, (249, 235, 211), key_rect, border_radius=ui(6))
+        pygame.draw.rect(
+            target, (125, 88, 69), key_rect, ui(2),
+            border_radius=ui(6)
+        )
         space_label = self.guide_font.render("SPACE", True, dark_bg)
         target.blit(space_label, space_label.get_rect(center=key_rect.center))
 
@@ -821,14 +825,15 @@ class IntroScene:
         x += next_text.get_width() + divider_gap
         pygame.draw.line(
             target, (124, 101, 88),
-            (x, center_y - 11), (x, center_y + 11), 1
+            (x, center_y - ui(11)), (x, center_y + ui(11)), ui(1)
         )
         x += divider_gap
 
-        # Compact circle, filling clockwise while SPACE is held.
         circle_rect = pygame.Rect(x, center_y - circle_size // 2, circle_size, circle_size)
-        radius = 12
-        pygame.draw.circle(target, (105, 85, 75), circle_rect.center, radius, 3)
+        radius = ui(12)
+        pygame.draw.circle(
+            target, (105, 85, 75), circle_rect.center, radius, ui(3)
+        )
 
         progress = 0.0
         if self.space_held_since is not None and not self.space_skip_triggered:
@@ -844,7 +849,7 @@ class IntroScene:
                     round(circle_rect.centerx + radius * math.cos(angle)),
                     round(circle_rect.centery + radius * math.sin(angle)),
                 ))
-            pygame.draw.lines(target, accent, False, points, 3)
+            pygame.draw.lines(target, accent, False, points, ui(3))
 
         symbol_font = self.guide_font
         symbol = symbol_font.render("S", True, accent if progress else cream)
