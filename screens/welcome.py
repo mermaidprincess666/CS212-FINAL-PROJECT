@@ -45,6 +45,8 @@ CAT_MAX_HEIGHT = 455
 CAT_TARGET_CENTER_X = 0.54
 CAT_BOTTOM_MARGIN = 165
 CAT_WALK_DURATION = 3.6
+CAT_REACTION_DURATION = 1.8  # Show the customer reaction before leaving
+CAT_EXIT_DURATION = 3.0  # Slower walk out to the right
 CAT_ORDER_TEXT = "Meow! One Hawaiian pizza, please!"
 CAT_ORDER_CHEF_TEXT = (
     "Our first customer ordered a Hawaiian pizza! "
@@ -68,6 +70,17 @@ KITCHEN_NAV_TUTORIAL_TEXT = (
     "at the bottom-right? Press D to go to the Kitchen. "
     "Go ahead, Chef, give it a try!"
 )
+
+SERVE_TUTORIAL_TEXT = (
+    "That pizza is cooked, Chef! Now click the highlighted customer "
+    "to serve their Hawaiian pizza. Hurry, they have been waiting!"
+)
+SERVE_FINISHED_TEXT = (
+    "Now that is a happy customer! Great work, Chef! "
+    "Our first Hawaiian pizza has been served!"
+)
+
+CAT_SERVE_GLOW_THICKNESS = 8
 
 TUTORIAL_LINES = [
     (
@@ -123,8 +136,13 @@ class WelcomeScene:
         self.cat_start_x = -self.cat.get_width() if self.cat else -ui(220)
         self.cat_target_x = round(WIDTH * CAT_TARGET_CENTER_X)
         self.cat_center_x = float(self.cat_start_x)
+        self.customer_reaction_elapsed = 0.0
+        self.cat_exit_elapsed = 0.0
+        self.cat_exit_start_x = float(self.cat_target_x)
+        self.cat_exit_target_x = float(WIDTH + (self.cat.get_width() // 2 if self.cat else ui(200)) + ui(30))
         self.current_order = None
         self.customer_wait_started_at = None
+        self.customer_wait_stopped_at = None
         self.customer_angry = False
         self.order_status = "waiting"
         self.cat_angry = None
@@ -134,6 +152,14 @@ class WelcomeScene:
                 (255, 160, 160), special_flags=pygame.BLEND_RGB_MULT
             )
 
+        # Shape-following glow and click mask for the first customer.
+        self.cat_mask = (
+            pygame.mask.from_surface(self.cat, 20)
+            if self.cat is not None else None
+        )
+        self.cat_glow = self._make_cat_glow()
+        self.counter_mask = None  # Filled when the counter is scaled below.
+
         if self.background is not None:
             self.background = pygame.transform.smoothscale(
                 self.background, (WIDTH, HEIGHT)
@@ -141,6 +167,7 @@ class WelcomeScene:
 
         if self.counter is not None:
             self.counter = self._resize_width(self.counter, WIDTH)
+            self.counter_mask = pygame.mask.from_surface(self.counter, 20)
 
         # Keep a dark copy of the counter for tutorial scenes.
         # The chef will be drawn in front of this layer.
@@ -414,6 +441,95 @@ class WelcomeScene:
             )
         target.blit(self.register, rect)
 
+    def _make_cat_glow(self):
+        """Make a yellow outline matching the cat's visible shape."""
+        if self.cat is None or self.cat_mask is None:
+            return None
+
+        thickness = max(3, ui(CAT_SERVE_GLOW_THICKNESS))
+        silhouette = self.cat_mask.to_surface(
+            setcolor=(*YELLOW, 255),
+            unsetcolor=(0, 0, 0, 0),
+        )
+        glow = pygame.Surface(
+            (self.cat.get_width() + 2 * thickness,
+             self.cat.get_height() + 2 * thickness),
+            pygame.SRCALPHA,
+        )
+        for dx, dy in (
+            (-thickness, 0), (thickness, 0),
+            (0, -thickness), (0, thickness),
+            (-thickness, -thickness), (-thickness, thickness),
+            (thickness, -thickness), (thickness, thickness),
+        ):
+            glow.blit(silhouette, (thickness + dx, thickness + dy))
+        return glow
+
+    def _cat_is_clicked(self, event_position):
+        """Only accept clicks on visible cat pixels above the counter."""
+        cat_rect = self._cat_rect()
+        if self.cat_mask is None or cat_rect is None:
+            return False
+
+        counter_rect = self._counter_rect()
+        for x, y in self._mouse_positions(event_position):
+            if not cat_rect.collidepoint(x, y):
+                continue
+            local_x = x - cat_rect.x
+            local_y = y - cat_rect.y
+            if not self.cat_mask.get_at((local_x, local_y)):
+                continue
+
+            # The cat stands BEHIND the counter: its hidden feet
+            # are not clickable through the countertop.
+            if counter_rect is not None and self.counter_mask is not None:
+                cx = x - counter_rect.x
+                cy = y - counter_rect.y
+                if (0 <= cx < self.counter_mask.get_size()[0]
+                        and 0 <= cy < self.counter_mask.get_size()[1]
+                        and self.counter_mask.get_at((cx, cy))):
+                    continue
+            return True
+        return False
+
+    def _start_serving_intro(self):
+        """Return from Oven, slide chef in, and highlight the cat."""
+        if self.phase != "playing" or self.order_status == "served":
+            return
+        self.phase = "serve_intro"
+        self._set_chef_dialogue(SERVE_TUTORIAL_TEXT, slide_in=True)
+
+    def _serve_customer(self):
+        """Hand over the cooked Hawaiian pizza and freeze patience."""
+        if self.phase != "serve_intro" or self.order_status == "served":
+            return
+        manager = self.game.scene_manager
+        oven = manager.scenes.get("oven")
+        if oven is None or getattr(oven, "oven_state", None) != "cooked":
+            return
+
+        self.customer_wait_stopped_at = manager.shop_clock.elapsed_seconds
+        self.customer_angry = False
+        self.order_status = "served"
+
+        # Let the cat speak first. The chef slides OUT during this
+        # reaction and will return only after the cat has fully left.
+        self._stop_narration()
+        self.dialogue_started = False
+        self.phase = "customer_reaction"
+        self.customer_reaction_elapsed = 0.0
+        self.chef_exit_timer = 0.0
+        print("Order served: Hawaiian Pizza — YA ME! TE!")
+
+    def _finish_serving(self):
+        """Slide the chef away once the player acknowledges success."""
+        if self.phase != "served" or self.characters_shown < len(self.dialogue):
+            return
+        self._stop_narration()
+        self.phase = "serve_exit"
+        self.chef_exit_timer = 0.0
+        self.dialogue_started = False
+
     def _refresh_dialogue(self):
         selected = getattr(self.game, "selected_character", None) or {}
         name = str(selected.get("name", "CHEF")).title()
@@ -542,7 +658,12 @@ class WelcomeScene:
         if self.customer_wait_started_at is None:
             return CUSTOMER_WAIT_SECONDS
         clock = self.game.scene_manager.shop_clock
-        elapsed = clock.elapsed_seconds - self.customer_wait_started_at
+        current_time = (
+            self.customer_wait_stopped_at
+            if self.customer_wait_stopped_at is not None
+            else clock.elapsed_seconds
+        )
+        elapsed = current_time - self.customer_wait_started_at
         return max(0.0, CUSTOMER_WAIT_SECONDS - max(0.0, elapsed))
 
     def _sync_patience(self):
@@ -586,8 +707,21 @@ class WelcomeScene:
             self.game.scene_manager.go_to(name)
 
     def handle_event(self, event):
-        """Handle chef dialogue, clickable responses, and navigation."""
+        """Handle chef dialogue, customer serving, and navigation."""
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.phase == "serve_intro":
+                if self._cat_is_clicked(event.pos):
+                    self._serve_customer()
+                return
+
+            if self.phase == "served":
+                if (self.dialogue_started
+                        and self.characters_shown >= len(self.dialogue)
+                        and self._clicked(
+                            event.pos, self._okay_rect(self._chef_bubble_rect())
+                        )):
+                    self._finish_serving()
+                return
             if self.phase == "chef":
                 if (
                     self.tutorial_index == len(TUTORIAL_LINES) - 1
@@ -622,6 +756,13 @@ class WelcomeScene:
                 return
 
         if event.type != pygame.KEYDOWN:
+            return
+
+        if self.phase in ("serve_intro", "served"):
+            if (event.key in (pygame.K_SPACE, pygame.K_RETURN, pygame.K_KP_ENTER)
+                    and self.characters_shown < len(self.dialogue)):
+                self.characters_shown = float(len(self.dialogue))
+                self._stop_narration()
             return
 
         if self.phase == "chef":
@@ -661,14 +802,16 @@ class WelcomeScene:
 
     def update(self, delta_time):
         """Animate the arriving customer and the chef's guided lessons."""
-        if self.phase in ("chef_exit", "navigation_exit"):
+        if self.phase in ("chef_exit", "navigation_exit", "serve_exit"):
             self.chef_exit_timer = min(
                 CHEF_EXIT_DURATION,
                 self.chef_exit_timer + delta_time,
             )
 
             if self.chef_exit_timer >= CHEF_EXIT_DURATION:
-                if self.phase == "chef_exit":
+                if self.phase == "serve_exit":
+                    self.phase = "done"
+                elif self.phase == "chef_exit":
                     self.show_tutorial_popup = False
                     self.phase = "cat_enter"
                     self.cat_walk_elapsed = 0.0
@@ -682,6 +825,36 @@ class WelcomeScene:
                     clock.start()
                     self.customer_wait_started_at = clock.elapsed_seconds
                     self._go_to("kitchen")
+            return
+
+        if self.phase == "customer_reaction":
+            # Keep the YA ME! TE! speech bubble on-screen while the
+            # chef slides back to the left.
+            self.customer_reaction_elapsed += delta_time
+            self.chef_exit_timer = min(
+                CHEF_EXIT_DURATION, self.chef_exit_timer + delta_time
+            )
+            if self.customer_reaction_elapsed >= CAT_REACTION_DURATION:
+                self.phase = "customer_exit"
+                self.cat_exit_elapsed = 0.0
+                self.cat_exit_start_x = float(self.cat_center_x)
+            return
+
+        if self.phase == "customer_exit":
+            # Customer walks out to the right behind the counter.
+            self.cat_exit_elapsed = min(
+                CAT_EXIT_DURATION, self.cat_exit_elapsed + delta_time
+            )
+            progress = self.cat_exit_elapsed / CAT_EXIT_DURATION
+            eased = progress * progress * (3 - 2 * progress)
+            self.cat_center_x = (
+                self.cat_exit_start_x
+                + (self.cat_exit_target_x - self.cat_exit_start_x) * eased
+            )
+            if progress >= 1.0:
+                # Only NOW does the chef return with congratulations.
+                self.phase = "served"
+                self._set_chef_dialogue(SERVE_FINISHED_TEXT, slide_in=True)
             return
 
         if self.phase == "cat_enter":
@@ -707,10 +880,17 @@ class WelcomeScene:
 
         if self.phase == "playing":
             self._sync_patience()
+            oven = self.game.scene_manager.scenes.get("oven")
+            if (self.current_order is not None
+                    and self.order_status != "served"
+                    and oven is not None
+                    and getattr(oven, "oven_state", None) == "cooked"):
+                self._start_serving_intro()
             return
 
         if self.phase not in (
-            "chef", "cat_order", "patience_intro", "navigation_intro"
+            "chef", "cat_order", "patience_intro", "navigation_intro",
+            "serve_intro", "served"
         ):
             return
 
@@ -729,7 +909,8 @@ class WelcomeScene:
         # The cat is in the room, so it must appear BEFORE the counter.
         if self.phase in (
             "cat_enter", "cat_order", "patience_intro",
-            "navigation_intro", "navigation_exit", "playing"
+            "navigation_intro", "navigation_exit", "playing",
+            "serve_intro", "customer_reaction", "customer_exit"
         ):
             self._draw_cat(target)
 
@@ -751,6 +932,14 @@ class WelcomeScene:
             if self.customer_angry:
                 self._draw_angry_message(target)
             self._draw_controls(target)
+        elif self.phase in (
+            "serve_intro", "customer_reaction", "customer_exit",
+            "served", "serve_exit"
+        ):
+            self._draw_serving_tutorial(target)
+        elif self.phase == "done":
+            # Empty counter, ready for the next customer's future order.
+            pass
 
     def _draw_customer_order_tutorial(self, target):
         """Show the cat, chef commentary, and order in the correct depth."""
@@ -781,6 +970,75 @@ class WelcomeScene:
             ):
                 self._draw_okay_button(target, self._okay_rect(bubble))
 
+    def _draw_cat_highlight(self, target):
+        """Keep a pulsing yellow cat outline visible before the player clicks."""
+        rect = self._cat_rect()
+        if rect is None or self.cat_glow is None:
+            return
+        thickness = max(3, ui(CAT_SERVE_GLOW_THICKNESS))
+        pulse = (math.sin(pygame.time.get_ticks() * 0.005) + 1) / 2
+        self.cat_glow.set_alpha(round(190 + 55 * pulse))
+        target.blit(
+            self.cat_glow,
+            (rect.x - thickness, rect.y - thickness),
+        )
+
+    def _draw_served_message(self, target):
+        """Show the customer's response after receiving the pizza."""
+        bubble = self._cat_bubble_rect()
+        bubble.height = ui(105)
+        pygame.draw.rect(
+            target, (91, 58, 44), bubble.move(0, ui(3)),
+            border_radius=ui(15),
+        )
+        pygame.draw.rect(target, CREAM, bubble, border_radius=ui(15))
+        pygame.draw.rect(target, BROWN, bubble, ui(3), border_radius=ui(15))
+        tag = self.guide_font.render("ORDER SERVED!", True, BROWN)
+        label = self.popup_font.render("YA ME! TE!", True, BROWN)
+        target.blit(tag, (bubble.x + ui(18), bubble.y + ui(13)))
+        target.blit(label, (bubble.x + ui(18), bubble.y + ui(45)))
+
+    def _draw_serving_tutorial(self, target):
+        """Reaction first, customer exit second, chef celebration last."""
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        overlay.fill((35, 22, 16, 140))
+        target.blit(overlay, (0, 0))
+
+        # The cat is behind the counter while waiting and leaving.
+        if self.phase in ("serve_intro", "customer_reaction", "customer_exit"):
+            if self.phase == "serve_intro":
+                self._draw_cat_highlight(target)
+            self._draw_cat(target)
+
+        if self.dimmed_counter is not None:
+            target.blit(self.dimmed_counter, self._counter_rect())
+
+        # Before serving, the chef gives the click instruction.
+        # While the cat says YA ME! TE!, the chef exits to the left.
+        # After the cat has left, the chef enters again.
+        if self.phase in (
+            "serve_intro", "customer_reaction", "served", "serve_exit"
+        ):
+            self._draw_chef(target)
+
+        if self.dimmed_register is not None:
+            target.blit(self.dimmed_register, self._register_rect())
+        self._draw_dimmed_clock(target)
+
+        if self.phase == "serve_intro":
+            self._draw_patience_bar(target)
+        elif self.phase == "customer_reaction":
+            self._draw_served_message(target)
+
+        # Dialogue always stays above the chef and cash register.
+        if self.phase in ("serve_intro", "served") and self.dialogue_started:
+            bubble = self._draw_dialogue(target)
+            if (
+                self.phase == "served"
+                and self.characters_shown >= len(self.dialogue)
+            ):
+                self._draw_okay_button(target, self._okay_rect(bubble))
+
     def _cat_rect(self, bob=0):
         """Keep the cat and patience bar anchored to the same character."""
         if self.cat is None:
@@ -799,9 +1057,9 @@ class WelcomeScene:
 
         bob = 0
         if self.phase == "cat_enter":
-            bob = round(
-                ui(3) * abs(math.sin(self.cat_walk_elapsed * 9))
-            )
+            bob = round(ui(3) * abs(math.sin(self.cat_walk_elapsed * 9)))
+        elif self.phase == "customer_exit":
+            bob = round(ui(3) * abs(math.sin(self.cat_exit_elapsed * 9)))
 
         image = self.cat_angry if self.customer_angry else self.cat
         target.blit(image, self._cat_rect(bob))
@@ -928,7 +1186,9 @@ class WelcomeScene:
         if self.tutorial_chef is None:
             return
 
-        if self.phase in ("chef_exit", "navigation_exit"):
+        if self.phase in (
+            "chef_exit", "navigation_exit", "serve_exit", "customer_reaction"
+        ):
             # Reverse the entrance animation to return to the left edge.
             progress = max(
                 0.0, 1.0 - self.chef_exit_timer / CHEF_EXIT_DURATION
@@ -1017,7 +1277,8 @@ class WelcomeScene:
             ui(305)
             if self.phase in (
                 "cat_order",
-                "patience_intro", "navigation_intro"
+                "patience_intro", "navigation_intro",
+                "serve_intro", "served", "serve_exit"
             )
             else self.popup_y
         )
@@ -1064,7 +1325,8 @@ class WelcomeScene:
         target.blit(scaled, rect)
 
         if (
-            self.tutorial_index != len(TUTORIAL_LINES) - 1
+            self.phase == "chef"
+            and self.tutorial_index != len(TUTORIAL_LINES) - 1
             and self.characters_shown >= len(self.dialogue)
         ):
             bounce = round(
