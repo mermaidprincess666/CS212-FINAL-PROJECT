@@ -24,6 +24,26 @@ class WelcomeScene:
         self.character_key = None
         self.character_image = None
 
+        # Store artwork
+        self.background = self._load_asset("game bg.png")
+        self.counter = self._load_asset("counter.png")
+        self.register = self._load_asset("cregister_close.png")
+
+        if self.background:
+            self.background = pygame.transform.smoothscale(
+                self.background, (WIDTH, HEIGHT)
+            )
+
+        if self.counter:
+            self.counter = self._scale_to_width(
+                self.counter, WIDTH
+            )
+
+        if self.register:
+            self.register = self._scale_to_width(
+                self.register, ui(190)
+            )
+
         self.title_font = self._font(
             "Lilita_One/LilitaOne-Regular.ttf",
             ui(58),
@@ -56,6 +76,25 @@ class WelcomeScene:
             HEIGHT - ui(70),
             ui(130),
             ui(43),
+        )
+
+    def _load_asset(self, filename):
+        """Load an image from ASSETS/MAIN."""
+        try:
+            return pygame.image.load(
+                str(ASSETS_DIR / "MAIN" / filename)
+            ).convert_alpha()
+        except (OSError, pygame.error) as error:
+            print(f"Could not load {filename}: {error}")
+            return None
+
+    def _scale_to_width(self, image, width):
+        """Resize while keeping the original proportions."""
+        scale = width / image.get_width()
+        height = max(1, round(image.get_height() * scale))
+
+        return pygame.transform.smoothscale(
+            image, (width, height)
         )
 
     def _font(self, filename, size, fallback):
@@ -109,20 +148,12 @@ class WelcomeScene:
                 max_height / image.get_height(),
             )
 
-            self.character_image = (
-                pygame.transform.smoothscale(
-                    image,
-                    (
-                        max(
-                            1,
-                            round(image.get_width() * scale),
-                        ),
-                        max(
-                            1,
-                            round(image.get_height() * scale),
-                        ),
-                    ),
-                )
+            self.character_image = pygame.transform.smoothscale(
+                image,
+                (
+                    max(1, round(image.get_width() * scale)),
+                    max(1, round(image.get_height() * scale)),
+                ),
             )
 
         except (
@@ -134,9 +165,7 @@ class WelcomeScene:
                 f"Welcome character artwork unavailable: {error}"
             )
 
-    def _center_text(
-        self, target, text, font, color, y
-    ):
+    def _center_text(self, target, text, font, color, y):
         image = font.render(text, True, color)
         target.blit(
             image,
@@ -185,54 +214,13 @@ class WelcomeScene:
         self._refresh_character()
 
     def draw(self, target, mouse_pos):
+        # 1. Background
         target.fill(CREAM)
 
-        outer = pygame.Rect(
-            ui(16),
-            ui(16),
-            WIDTH - ui(32),
-            HEIGHT - ui(32),
-        )
+        if self.background:
+            target.blit(self.background, (0, 0))
 
-        pygame.draw.rect(
-            target,
-            PAPER,
-            outer,
-            border_radius=ui(25),
-        )
-        pygame.draw.rect(
-            target,
-            TERRACOTTA,
-            outer,
-            ui(5),
-            border_radius=ui(25),
-        )
-
-        inner = outer.inflate(-ui(24), -ui(24))
-        pygame.draw.rect(
-            target,
-            BROWN,
-            inner,
-            ui(2),
-            border_radius=ui(18),
-        )
-
-        tile = ui(17)
-
-        for row in range(3):
-            for col in range(5):
-                if (row + col) % 2 == 0:
-                    pygame.draw.rect(
-                        target,
-                        (220, 151, 117),
-                        (
-                            ui(44) + col * tile,
-                            ui(44) + row * tile,
-                            tile,
-                            tile,
-                        ),
-                    )
-
+        # 2. Welcome heading
         name = str(
             self._character().get("name", "CHEF")
         ).upper()
@@ -242,7 +230,7 @@ class WelcomeScene:
             f"WELCOME, {name}!",
             self.title_font,
             TERRACOTTA,
-            ui(103),
+            ui(95),
         )
 
         self._center_text(
@@ -250,9 +238,10 @@ class WelcomeScene:
             "Your pizza adventure starts here!",
             self.body_font,
             DARK,
-            ui(158),
+            ui(150),
         )
 
+        # 3. Character
         if self.character_image is not None:
             bob = round(
                 math.sin(self.elapsed * 2.4) * ui(3)
@@ -261,12 +250,30 @@ class WelcomeScene:
             rect = self.character_image.get_rect(
                 midbottom=(
                     WIDTH // 2,
-                    ui(435) + bob,
+                    ui(460) + bob,
                 )
             )
 
             target.blit(self.character_image, rect)
 
+        # 4. Counter in front of character
+        if self.counter:
+            counter_rect = self.counter.get_rect(
+                midbottom=(WIDTH // 2, HEIGHT)
+            )
+            target.blit(self.counter, counter_rect)
+
+        # 5. Cash register on the counter
+        if self.register:
+            register_rect = self.register.get_rect(
+                midbottom=(
+                    WIDTH // 2 + ui(325),
+                    HEIGHT - ui(125),
+                )
+            )
+            target.blit(self.register, register_rect)
+
+        # 6. Dialogue panel
         panel = pygame.Rect(
             WIDTH // 2 - ui(355),
             ui(438),
@@ -310,6 +317,7 @@ class WelcomeScene:
             panel.y + ui(79),
         )
 
+        # 7. Buttons
         self._button(
             target,
             self.start_button,

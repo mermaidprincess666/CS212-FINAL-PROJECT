@@ -122,18 +122,16 @@ class CharacterScene:
             except (OSError, pygame.error) as error:
                 print(f"Could not load character selection music: {error}")
 
-        # Separate confirmation sound; falls back to select.mp3.
+        # Play selected.mp3 when CONFIRM is pressed.
         self.confirm_sound = None
-        for filename in ("confirm.mp3", "select.mp3"):
+        if pygame.mixer.get_init():
             try:
-                if pygame.mixer.get_init():
-                    self.confirm_sound = pygame.mixer.Sound(
-                        str(ASSETS_DIR / "MUSIC" / filename)
-                    )
-                    self.confirm_sound.set_volume(0.7)
-                    break
-            except (OSError, pygame.error):
-                continue
+                self.confirm_sound = pygame.mixer.Sound(
+                    str(ASSETS_DIR / "MUSIC" / "selected.mp3")
+                )
+                self.confirm_sound.set_volume(0.7)
+            except (OSError, pygame.error) as error:
+                print(f"Could not load confirmation sound: {error}")
 
         self.confirm_animation = 0.0
 
