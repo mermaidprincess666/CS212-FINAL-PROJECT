@@ -1,7 +1,7 @@
-
 """Main menu and the gate-opening transition animation."""
 
 import math
+from pathlib import Path
 
 import pygame
 
@@ -704,11 +704,16 @@ class GateScene:
         self.game = game
         self.menu_scene = menu_scene
         self.covered = False
+        self.gate_open_sound = pygame.mixer.Sound(
+            str(Path("ASSET") / "MUSIC" / "gateopen.mp3")
+        )
+        self.gate_sound_played = False
         self.restart()
 
     def restart(self):
         self.elapsed = 0.0
         self.covered = False
+        self.gate_sound_played = False
 
     def handle_event(self, event):
         if (
@@ -734,6 +739,11 @@ class GateScene:
             return
 
         self.elapsed += delta_time
+
+        if not self.gate_sound_played and self.elapsed >= GATE_OPEN_DELAY + 0.4:
+            self.gate_sound_played = True
+            if not self.game.menu_music.muted:
+                self.gate_open_sound.play()
 
         if self.elapsed >= GATE_ANIMATION_TIME:
             self.covered = True

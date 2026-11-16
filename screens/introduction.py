@@ -1,4 +1,7 @@
 import math
+import random
+from array import array
+import sys
 import pygame
 
 from settings import WIDTH, HEIGHT, ASSETS_DIR
@@ -16,14 +19,10 @@ SLIDE_DURATION = 0.85
 TYPE_SPEED = 45
 
 PANEL_BORDER_COLOR = (91, 28, 27)
-PANEL_BORDER_WIDTH = 20             # diagonal edges
-PANEL_STRAIGHT_BORDER_WIDTH = 12    # straight (vertical) edges
+PANEL_BORDER_WIDTH = 20
+PANEL_STRAIGHT_BORDER_WIDTH = 12
 
-# Black gap between different pairs (P2|P3 and P4|P5).
-# Part of the layout, so pairs never need to be painted over.
 PAIR_GAP = 20
-
-# Black line inside a pair (P1|P2, P3|P4, P5|P6). 0 = fully merged.
 MERGE_GAP = 8
 
 
@@ -85,8 +84,20 @@ class IntroScene:
             game.fonts.get("small")
         )
 
-        # Preload all six panels. Borders are computed once here and
-        # cached in self.borders, then baked into the cached panel surface.
+        # Deep speech-like gibberish voice; no audio file required.
+        self.voice_rng = random.Random()
+        self.voice_sounds = {}
+        self.voice_channel = None
+        self.last_voice_time = -1000
+        self.voice_delay = 65
+        mixer_settings = pygame.mixer.get_init()
+        if getattr(IntroScene, "_voice_cache_settings", None) != mixer_settings:
+            self._build_voice_sounds()
+            IntroScene._voice_cache = self.voice_sounds
+            IntroScene._voice_cache_settings = mixer_settings
+        else:
+            self.voice_sounds = IntroScene._voice_cache
+
         self.panels = {}
         self.borders = {}
 
@@ -103,7 +114,6 @@ class IntroScene:
                     (WIDTH, HEIGHT)
                 )
 
-                # Odd panels: left border. Even panels: right border.
                 side = "left" if number % 2 == 1 else "right"
 
                 border = self._build_border(image, side)
@@ -121,14 +131,12 @@ class IntroScene:
                     (WIDTH, HEIGHT),
                     pygame.SRCALPHA
                 )
+
                 self.borders[number] = pygame.Surface(
                     (WIDTH, HEIGHT),
                     pygame.SRCALPHA
                 )
 
-        # Pair 0 = P1 + P2
-        # Pair 1 = P3 + P4
-        # Pair 2 = P5 + P6
         self.pair_x = {
             0: float(WIDTH),
             1: float(WIDTH),
@@ -156,28 +164,13 @@ class IntroScene:
             (0.10, 0.55),
         ]
 
-        self.back_button = pygame.Rect(
-            35,
-            HEIGHT - 60,
-            130,
-            42
-        )
-
-        self.skip_button = pygame.Rect(
-            WIDTH - 325,
-            HEIGHT - 60,
-            130,
-            42
-        )
-
-        self.next_button = pygame.Rect(
-            WIDTH - 180,
-            HEIGHT - 60,
-            145,
-            42
-        )
-
         self.pending_index = 0
+        self.space_held_since = None
+        self.space_skip_triggered = False
+        self.hold_to_skip_ms = 1000
+        self.guide_font = self._load_font(
+            "Fredoka/static/Fredoka-SemiBold.ttf", 14, self.button_font
+        )
 
         self.reset()
 
@@ -196,16 +189,126 @@ class IntroScene:
                 size
             )
 
+    def _build_voice_sounds(self):
+        """Generate a small set of deep gibberish sounds efficiently."""
+        mixer = pygame.mixer.get_init()
+        if mixer is None:
+            return
+        sample_rate, sample_format, channels = mixer
+        if sample_format != -16:
+            print("Gibberish voice requires a signed 16-bit audio mixer.")
+            return
+
+        # Reuse 15 short sounds rather than synthesizing 78 at startup.
+        vowels = {
+            "a": (730, 1150, 2450),
+            "e": (480, 1750, 2500),
+            "i": (330, 2150, 2900),
+            "o": (520, 950, 2400),
+            "u": (370, 850, 2200),
+        }
+        vowel_cycle = "aoeuiouaeoiaueo"
+        syllables = {}
+        for vowel, (f1, f2, f3) in vowels.items():
+            syllables[vowel] = []
+            for variant in range(3):
+                pitch = 112 + ("aeiou".index(vowel) * 7 + variant * 13) % 45
+                duration = 0.095 + variant * 0.012
+                frame_count = int(sample_rate * duration)
+                samples = array("h")
+                phase = 0.0
+                noise_state = 13579 + variant * 41
+                # Calculate harmonic weights ONCE, not for every sample.
+                weights = []
+                for harmonic in range(1, 11):
+                    frequency = harmonic * pitch
+                    formant = (
+                        1.15 * math.exp(-((frequency - f1) / 220) ** 2)
+                        + 0.85 * math.exp(-((frequency - f2) / 310) ** 2)
+                        + 0.35 * math.exp(-((frequency - f3) / 420) ** 2)
+                    )
+                    weights.append((0.10 + formant) / harmonic ** 0.7)
+                weight_total = sum(weights)
+                for frame in range(frame_count):
+                    progress = frame / frame_count
+                    attack = min(1.0, progress / 0.11)
+                    release = min(1.0, (1.0 - progress) / 0.22)
+                    envelope = max(0.0, min(attack, release))
+                    bend = 1.0 + (variant - 1) * 0.13 * (progress - 0.5)
+                    phase += 2 * math.pi * pitch * bend / sample_rate
+                    voice = sum(
+                        weight * math.sin(harmonic * phase)
+                        for harmonic, weight in enumerate(weights, 1)
+                    ) / weight_total
+                    noise_state = (1103515245 * noise_state + 12345) & 0x7fffffff
+                    noise = noise_state / 1073741824.0 - 1.0
+                    breath = 0.10 * max(0.0, 1.0 - progress / 0.22)
+                    value = max(-32768, min(32767, int(
+                        22000 * envelope * (voice * (1 - breath) + noise * breath)
+                    )))
+                    samples.extend([value] * channels)
+                if sys.byteorder != "little":
+                    samples.byteswap()
+                sound = pygame.mixer.Sound(buffer=samples.tobytes())
+                sound.set_volume(1.0)
+                syllables[vowel].append(sound)
+
+        self.voice_sounds = {
+            letter: syllables[
+                letter if letter in vowels else vowel_cycle[index % len(vowel_cycle)]
+            ]
+            for index, letter in enumerate("abcdefghijklmnopqrstuvwxyz")
+        }
+
+    def _stop_narration(self):
+        if self.voice_channel is not None:
+            self.voice_channel.stop()
+            self.voice_channel = None
+        self.last_voice_time = -1000
+
+    def _speak_new_letters(self, text, old_count, new_count):
+        if self.transitioning or not self.voice_sounds:
+            return
+
+        if getattr(self.game.menu_music, "muted", False):
+            self._stop_narration()
+            return
+
+        # Only make a sound when a new spoken character appears.
+        new_characters = text[old_count:new_count]
+        letters = [character.lower() for character in new_characters if character.isascii() and character.isalpha()]
+        if not letters:
+            return
+
+        now = pygame.time.get_ticks()
+        if now - self.last_voice_time < self.voice_delay:
+            return
+
+        letter = letters[-1]
+        variants = self.voice_sounds.get(letter)
+        if not variants:
+            return
+
+        sound = self.voice_rng.choice(variants)
+        if self.voice_channel is not None:
+            self.voice_channel.stop()
+
+        self.voice_channel = sound.play()
+        self.last_voice_time = now
+        # Variable spacing makes the voice feel like babbling, not a metronome.
+        self.voice_delay = self.voice_rng.randint(42, 78)
+
     def _build_border(self, image, side):
         """
         Border follows the visible edge of the artwork.
-        Rows whose edge sits on the image boundary (straight edge) use
-        PANEL_STRAIGHT_BORDER_WIDTH; diagonal rows use PANEL_BORDER_WIDTH.
         """
         width, height = image.get_size()
         mask = pygame.mask.from_surface(image, 20)
 
-        border = pygame.Surface((width, height), pygame.SRCALPHA)
+        border = pygame.Surface(
+            (width, height),
+            pygame.SRCALPHA
+        )
 
         for y in range(height):
             if side == "left":
@@ -214,6 +317,7 @@ class IntroScene:
                 xs = range(width - 1, -1, -1)
 
             edge_x = None
+
             for x in xs:
                 if mask.get_at((x, y)):
                     edge_x = x
@@ -222,7 +326,12 @@ class IntroScene:
             if edge_x is None:
                 continue
 
-            straight = edge_x <= 0 if side == "left" else edge_x >= width - 1
+            straight = (
+                edge_x <= 0
+                if side == "left"
+                else edge_x >= width - 1
+            )
+
             w = (
                 PANEL_STRAIGHT_BORDER_WIDTH
                 if straight
@@ -236,22 +345,20 @@ class IntroScene:
 
             border.fill(PANEL_BORDER_COLOR, rect)
 
-        # Keep the border strictly inside the opaque artwork.
-        result = pygame.Surface((width, height), pygame.SRCALPHA)
-        mask.to_surface(result, setsurface=border, unsetcolor=(0, 0, 0, 0))
+        result = pygame.Surface(
+            (width, height),
+            pygame.SRCALPHA
+        )
+
+        mask.to_surface(
+            result,
+            setsurface=border,
+            unsetcolor=(0, 0, 0, 0)
+        )
 
         return result
 
     def _targets_for(self, current):
-        """
-        Screen x of each pair for the given current panel.
-
-        Pairs sit on one strip with PAIR_GAP between them, so the gap is
-        part of the layout and stays constant while sliding.
-        Odd current panel  -> that pair's odd panel on the right half.
-        Even current panel -> that pair fills the screen (shifted left by
-        MERGE_GAP so the even panel's right edge is not clipped).
-        """
         current_pair = (current - 1) // 2
         stride = WIDTH + PAIR_GAP
 
@@ -271,6 +378,8 @@ class IntroScene:
         )
 
     def reset_for_transition(self, reset_story=False):
+        self._stop_narration()
+
         if reset_story:
             self.index = 0
             self.current_panel = 1
@@ -308,6 +417,8 @@ class IntroScene:
 
         self.characters_shown = 0.0
         self.advance_requested = False
+        self.space_held_since = None
+        self.space_skip_triggered = False
 
         self.bubble_timer = 0.0
         self.bubble_scale = 0.75
@@ -316,43 +427,32 @@ class IntroScene:
 
     def handle_event(self, event):
         if event.type == pygame.KEYDOWN:
-            if event.key in (
-                pygame.K_SPACE,
-                pygame.K_RETURN,
-                pygame.K_RIGHT
-            ):
+            if event.key == pygame.K_SPACE:
+                if self.space_held_since is None:
+                    self.space_held_since = pygame.time.get_ticks()
+                    self.space_skip_triggered = False
+            elif event.key in (pygame.K_RETURN, pygame.K_RIGHT):
                 self.advance_requested = True
-
             elif event.key == pygame.K_LEFT:
                 self._previous()
-
             elif event.key == pygame.K_ESCAPE:
-                self.game.scene_manager.go_to(
-                    "menu"
-                )
+                self._stop_narration()
+                self.game.scene_manager.go_to("menu")
 
-        elif event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button != 1:
-                return
-
-            pos = event.pos
-
-            if self.back_button.collidepoint(pos):
-                self._previous()
-
-            elif self.skip_button.collidepoint(pos):
-                self.game.scene_manager.go_to(
-                    "thoughts"
-                )
-
-            else:
-                self.advance_requested = True
+        elif event.type == pygame.KEYUP:
+            if event.key == pygame.K_SPACE:
+                if self.space_held_since is not None and not self.space_skip_triggered:
+                    self.advance_requested = True
+                self.space_held_since = None
+                self.space_skip_triggered = False
 
     def _previous(self):
         if self.transitioning:
             return
 
         if self.index == 0:
+            self._stop_narration()
+
             self.game.scene_manager.go_to(
                 "menu"
             )
@@ -363,6 +463,8 @@ class IntroScene:
         )
 
     def _change_story(self, new_index):
+        self._stop_narration()
+
         old_panel = self.current_panel
 
         self.index = new_index
@@ -397,7 +499,16 @@ class IntroScene:
             "screen_fade_state",
             "none"
         ) != "none":
+            self._stop_narration()
             return
+
+        if self.space_held_since is not None and not self.space_skip_triggered:
+            elapsed = pygame.time.get_ticks() - self.space_held_since
+            if elapsed >= self.hold_to_skip_ms:
+                self.space_skip_triggered = True
+                self._stop_narration()
+                manager.go_to("thoughts")
+                return
 
         if self.transitioning:
             self.transition_time += delta_time
@@ -435,6 +546,7 @@ class IntroScene:
                     self.characters_shown = float(
                         len(text)
                     )
+                    self._stop_narration()
 
                 elif self.index + 1 < len(STORY):
                     self._change_story(
@@ -442,6 +554,8 @@ class IntroScene:
                     )
 
                 else:
+                    self._stop_narration()
+
                     manager.go_to(
                         "thoughts"
                     )
@@ -450,11 +564,13 @@ class IntroScene:
         if not self.transitioning:
             current_text = STORY[self.index][2]
 
+            old_count = int(self.characters_shown)
             self.characters_shown = min(
                 float(len(current_text)),
-                self.characters_shown
-                + TYPE_SPEED * delta_time
+                self.characters_shown + TYPE_SPEED * delta_time
             )
+            new_count = int(self.characters_shown)
+            self._speak_new_letters(current_text, old_count, new_count)
 
             self.bubble_timer = min(
                 self.bubble_duration,
@@ -471,28 +587,24 @@ class IntroScene:
                 + 0.25 * (1 - (1 - t) ** 3)
             )
 
+
     def _draw_panels(self, target):
-        # The black background is the gap. Nothing is painted over the
-        # artwork or borders; gaps come from positions alone.
         target.fill(BLACK)
 
         for pair in range(3):
             pair_x = round(self.pair_x[pair])
 
-            # Skip pairs that are completely offscreen.
             if pair_x >= WIDTH or pair_x + WIDTH + MERGE_GAP <= 0:
                 continue
 
             odd_number = pair * 2 + 1
             even_number = odd_number + 1
 
-            # Borders are already baked into these cached surfaces.
             target.blit(
                 self.panels[odd_number],
                 (pair_x, 0)
             )
 
-            # Even panel is offset to open the black line inside the pair.
             target.blit(
                 self.panels[even_number],
                 (pair_x + MERGE_GAP, 0)
@@ -679,79 +791,69 @@ class IntroScene:
                 )
             )
 
-    def _draw_button(
-        self,
-        target,
-        rect,
-        label,
-        mouse_pos
-    ):
-        hovered = rect.collidepoint(
-            mouse_pos
-        )
+    def _draw_navigation_guide(self, target):
+        """Compact bottom-left SPACE controls with a hold progress ring."""
+        cream = (255, 238, 208)
+        dark_bg = (39, 25, 23)
+        accent = (245, 173, 104)
 
-        color = (
-            (202, 105, 76)
-            if hovered
-            else TERRA
-        )
+        key_width, key_height = 66, 27
+        circle_size = 28
+        gap = 9
+        divider_gap = 15
+        x = 16
+        center_y = HEIGHT - 24
 
-        pygame.draw.rect(
-            target,
-            DARK,
-            rect.move(3, 4),
-            border_radius=9
-        )
+        next_text = self.guide_font.render("Next", True, cream)
+        hold_text = self.guide_font.render("Hold to skip", True, cream)
 
-        pygame.draw.rect(
-            target,
-            color,
-            rect,
-            border_radius=9
-        )
+        # Small keyboard SPACE icon.
+        key_rect = pygame.Rect(x, center_y - key_height // 2, key_width, key_height)
+        pygame.draw.rect(target, (103, 73, 60), key_rect.move(0, 2), border_radius=6)
+        pygame.draw.rect(target, (249, 235, 211), key_rect, border_radius=6)
+        pygame.draw.rect(target, (125, 88, 69), key_rect, 2, border_radius=6)
+        space_label = self.guide_font.render("SPACE", True, dark_bg)
+        target.blit(space_label, space_label.get_rect(center=key_rect.center))
 
-        pygame.draw.rect(
-            target,
-            DARK,
-            rect,
-            2,
-            border_radius=9
-        )
+        x = key_rect.right + gap
+        target.blit(next_text, next_text.get_rect(midleft=(x, center_y)))
 
-        image = self.button_font.render(
-            label,
-            True,
-            WHITE
+        x += next_text.get_width() + divider_gap
+        pygame.draw.line(
+            target, (124, 101, 88),
+            (x, center_y - 11), (x, center_y + 11), 1
         )
+        x += divider_gap
 
-        target.blit(
-            image,
-            image.get_rect(
-                center=rect.center
-            )
-        )
+        # Compact circle, filling clockwise while SPACE is held.
+        circle_rect = pygame.Rect(x, center_y - circle_size // 2, circle_size, circle_size)
+        radius = 12
+        pygame.draw.circle(target, (105, 85, 75), circle_rect.center, radius, 3)
+
+        progress = 0.0
+        if self.space_held_since is not None and not self.space_skip_triggered:
+            elapsed = pygame.time.get_ticks() - self.space_held_since
+            progress = min(1.0, max(0.0, elapsed / self.hold_to_skip_ms))
+
+        if progress > 0:
+            steps = max(2, int(64 * progress))
+            points = []
+            for i in range(steps + 1):
+                angle = -math.pi / 2 + 2 * math.pi * progress * i / steps
+                points.append((
+                    round(circle_rect.centerx + radius * math.cos(angle)),
+                    round(circle_rect.centery + radius * math.sin(angle)),
+                ))
+            pygame.draw.lines(target, accent, False, points, 3)
+
+        symbol_font = self.guide_font
+        symbol = symbol_font.render("S", True, accent if progress else cream)
+        target.blit(symbol, symbol.get_rect(center=circle_rect.center))
+
+        x = circle_rect.right + gap
+        target.blit(hold_text, hold_text.get_rect(midleft=(x, center_y)))
 
     def draw(self, target, mouse_pos):
         self._draw_panels(target)
         self._draw_dialogue(target)
-
-        self._draw_button(
-            target,
-            self.back_button,
-            "BACK",
-            mouse_pos
-        )
-
-        self._draw_button(
-            target,
-            self.skip_button,
-            "SKIP",
-            mouse_pos
-        )
-
-        self._draw_button(
-            target,
-            self.next_button,
-            "NEXT",
-            mouse_pos
-        )
+        self._draw_navigation_guide(target)
