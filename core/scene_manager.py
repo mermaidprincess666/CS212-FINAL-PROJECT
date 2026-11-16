@@ -9,7 +9,6 @@ from screens.introduction import IntroScene
 from screens.menu import GateScene, MenuScene
 from screens.settings import SettingsScreen
 from screens.credits import CreditsScreen
-from screens.thoughts import ThoughtsScene
 
 from settings import (
     HEIGHT,
@@ -41,7 +40,6 @@ class SceneManager:
             "menu": menu_scene,
             "gate": GateScene(game, menu_scene),
             "intro": IntroScene(game),
-            "thoughts": ThoughtsScene(game),
             "character": CharacterScene(game),
             "continue": InfoScene(
                 game,

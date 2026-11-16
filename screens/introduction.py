@@ -506,7 +506,7 @@ class IntroScene:
             if elapsed >= self.hold_to_skip_ms:
                 self.space_skip_triggered = True
                 self._stop_narration()
-                manager.go_to("thoughts")
+                manager.go_to("character")
                 return
 
         if self.transitioning:
@@ -555,9 +555,7 @@ class IntroScene:
                 else:
                     self._stop_narration()
 
-                    manager.go_to(
-                        "thoughts"
-                    )
+                    manager.go_to("character")
                     return
 
         if not self.transitioning:
