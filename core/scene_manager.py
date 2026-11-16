@@ -9,6 +9,7 @@ from screens.introduction import IntroScene
 from screens.menu import GateScene, MenuScene
 from screens.settings import SettingsScreen
 from screens.credits import CreditsScreen
+from screens.welcome import WelcomeScene
 
 from settings import (
     HEIGHT,
@@ -41,6 +42,7 @@ class SceneManager:
             "gate": GateScene(game, menu_scene),
             "intro": IntroScene(game),
             "character": CharacterScene(game),
+            "welcome": WelcomeScene(game),
             "continue": InfoScene(
                 game,
                 "Continue",
@@ -83,7 +85,7 @@ class SceneManager:
         if (
             event.type == pygame.KEYDOWN
             and event.key == pygame.K_ESCAPE
-            and self.current_name != "character"
+            and self.current_name not in ("character", "welcome")
         ):
             if self.current_name == "menu":
                 self.game.running = False
@@ -145,7 +147,6 @@ class SceneManager:
         )
 
     def _check_scene_name(self, name):
-
         if name not in self.scenes:
             available_screens = ", ".join(self.scenes)
 
@@ -161,11 +162,9 @@ class SceneManager:
 
         # Switch scenes while the fade fully covers the screen.
         if self.screen_fade_state == "out":
-
             self.screen_fade_alpha += SCREEN_FADE_SPEED
 
             if self.screen_fade_alpha >= 255:
-
                 self.screen_fade_alpha = 255
                 origin = self.current_name
 
@@ -180,7 +179,6 @@ class SceneManager:
                 self.screen_fade_state = "in"
 
         elif self.screen_fade_state == "in":
-
             self.screen_fade_alpha -= SCREEN_FADE_SPEED
 
             if self.screen_fade_alpha <= 0:
@@ -188,7 +186,6 @@ class SceneManager:
                 self.screen_fade_state = "none"
 
         if self.white_in_alpha > 0:
-
             self.white_in_alpha = max(
                 0.0,
                 self.white_in_alpha - delta_time / WHITE_IN_TIME
@@ -200,16 +197,13 @@ class SceneManager:
         self.current_scene.draw(target, mouse_pos)
 
         if self.screen_fade_alpha > 0:
-
             self.black_surface.set_alpha(self.screen_fade_alpha)
             target.blit(self.black_surface, (0, 0))
 
         if self.white_in_alpha > 0:
-
             self.game.warm_surface.set_alpha(
                 int(255 * self._ease(self.white_in_alpha))
             )
-
             target.blit(self.game.warm_surface, (0, 0))
 
     @staticmethod

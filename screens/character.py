@@ -59,6 +59,10 @@ TITLE_TEXT_COLOR = (166, 82, 60)
 NAME_TEXT_COLOR = (103, 60, 43)
 BODY_TEXT_COLOR = (73, 56, 46)
 
+CONFIRM_BOUNCE_TIME = 0.35
+NEXT_SCENE = "welcome"  # Only used when registered in scene_manager.scenes.
+
+
 
 class CharacterScene:
     """Let players preview, select, and confirm characters."""
@@ -70,6 +74,15 @@ class CharacterScene:
             "title", ui(90), game.fonts["title"]
         )
         self.heading_font = self.title_font
+        self.ready_label_font = self._load_font(
+            "name", ui(23), game.fonts["button"]
+        )
+        self.ready_title_font = self._load_font(
+            "title", ui(67), game.fonts["title"]
+        )
+        self.ready_subtitle_font = self._load_font(
+            "body", ui(21), game.fonts["button"]
+        )
 
         self.name_font = self._load_font(
             "name", ui(36), game.fonts["title"]
@@ -108,6 +121,21 @@ class CharacterScene:
                 self.background_music.set_volume(0.35)
             except (OSError, pygame.error) as error:
                 print(f"Could not load character selection music: {error}")
+
+        # Separate confirmation sound; falls back to select.mp3.
+        self.confirm_sound = None
+        for filename in ("confirm.mp3", "select.mp3"):
+            try:
+                if pygame.mixer.get_init():
+                    self.confirm_sound = pygame.mixer.Sound(
+                        str(ASSETS_DIR / "MUSIC" / filename)
+                    )
+                    self.confirm_sound.set_volume(0.7)
+                    break
+            except (OSError, pygame.error):
+                continue
+
+        self.confirm_animation = 0.0
 
         self.selected_index = 0
         self.elapsed = 0.0
@@ -203,11 +231,14 @@ class CharacterScene:
         )
 
     def handle_event(self, event):
+        if self.confirm_animation > 0:
+            return
+
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_LEFT:
+            if event.key == pygame.K_LEFT and not self.confirmed:
                 self._select(self.selected_index - 1)
 
-            elif event.key == pygame.K_RIGHT:
+            elif event.key == pygame.K_RIGHT and not self.confirmed:
                 self._select(self.selected_index + 1)
 
             elif event.key in (
@@ -225,10 +256,10 @@ class CharacterScene:
             event.type == pygame.MOUSEBUTTONDOWN
             and event.button == 1
         ):
-            if self.left_arrow_btn.collidepoint(event.pos):
+            if not self.confirmed and self.left_arrow_btn.collidepoint(event.pos):
                 self._select(self.selected_index - 1)
 
-            elif self.right_arrow_btn.collidepoint(event.pos):
+            elif not self.confirmed and self.right_arrow_btn.collidepoint(event.pos):
                 self._select(self.selected_index + 1)
 
             elif self.confirm_button.collidepoint(event.pos):
@@ -238,6 +269,9 @@ class CharacterScene:
                 self._back()
 
     def _select(self, index):
+        if self.confirmed:
+            return
+
         index %= len(CHARACTERS)
 
         if index == self.selected_index:
@@ -256,10 +290,30 @@ class CharacterScene:
             self.select_sound.play()
 
     def _confirm(self):
+        if self.confirmed:
+            self._start_game()
+            return
+
         self.game.selected_character = dict(
             CHARACTERS[self.selected_index]
         )
         self.confirmed = True
+        self.confirm_animation = CONFIRM_BOUNCE_TIME
+
+        if self.confirm_sound is not None and not getattr(
+            self.game.menu_music, "muted", False
+        ):
+            self.confirm_sound.play()
+
+    def _start_game(self):
+        """Use the scene manager's fade to enter the welcome screen."""
+        scenes = getattr(self.game.scene_manager, "scenes", {})
+        if NEXT_SCENE not in scenes:
+            print(f"Cannot start: scene {NEXT_SCENE!r} is not registered yet.")
+            return
+
+        self._stop_background_music()
+        self.game.scene_manager.go_to(NEXT_SCENE)
 
     def _back(self):
         self._stop_background_music()
@@ -288,6 +342,9 @@ class CharacterScene:
 
         self.elapsed += delta_time
 
+        if self.confirm_animation > 0:
+            self.confirm_animation = max(0.0, self.confirm_animation - delta_time)
+
         self.transition_time = max(
             0.0,
             self.transition_time - delta_time,
@@ -297,11 +354,15 @@ class CharacterScene:
             self.transition_from = None
 
     def draw(self, target, mouse_pos):
+        self._draw_content(target, mouse_pos)
+
+    def _draw_content(self, target, mouse_pos):
         if self.background is not None:
             target.blit(self.background, (0, 0))
         else:
             target.fill((219, 183, 153))
 
+        # Original title position, behind the character artwork.
         self._draw_heading(target)
         self._draw_selected_character(target)
 
@@ -309,18 +370,14 @@ class CharacterScene:
         self._draw_character_copy(target, mouse_pos)
         self._draw_selected_hands(target)
 
-        self._draw_arrow_button(
-            target,
-            self.left_arrow_btn,
-            "<",
-            mouse_pos,
-        )
-        self._draw_arrow_button(
-            target,
-            self.right_arrow_btn,
-            ">",
-            mouse_pos,
-        )
+        # Hide navigation arrows once the character is confirmed.
+        if not self.confirmed:
+            self._draw_arrow_button(
+                target, self.left_arrow_btn, "<", mouse_pos
+            )
+            self._draw_arrow_button(
+                target, self.right_arrow_btn, ">", mouse_pos
+            )
 
         self._draw_button(
             target,
@@ -330,7 +387,7 @@ class CharacterScene:
         )
 
         confirm_text = (
-            "CONFIRMED" if self.confirmed else "CONFIRM"
+            "START" if self.confirmed else "CONFIRM"
         )
 
         self._draw_button(
@@ -341,23 +398,13 @@ class CharacterScene:
             primary=True,
         )
 
-        if self.confirmed:
-            name = CHARACTERS[
-                self.selected_index
-            ]["name"]
-
-            draw_text_center(
-                target,
-                f"{name} is ready for service!",
-                self.label_font,
-                BODY_TEXT_COLOR,
-                (WIDTH // 2, HEIGHT - ui(110)),
-            )
 
     def _draw_heading(self, target):
+        """Keep the heading in its original position, behind sprites."""
+        title = "CHARACTER SELECTED" if self.confirmed else "SELECT CHARACTER"
         draw_text_center(
             target,
-            "SELECT CHARACTER",
+            title,
             self.heading_font,
             TITLE_TEXT_COLOR,
             (WIDTH // 2, ui(105)),
@@ -402,6 +449,7 @@ class CharacterScene:
             -ui(30)
             + CHARACTER_OFFSET[1]
             + bob
+            + self._bounce_offset()
         )
 
         if self.transition_from is not None:
@@ -466,6 +514,12 @@ class CharacterScene:
             image, (center_x, base_y)
         )
 
+    def _bounce_offset(self):
+        if self.confirm_animation <= 0:
+            return 0
+        progress = 1 - self.confirm_animation / CONFIRM_BOUNCE_TIME
+        return -round(ui(18) * math.sin(math.pi * progress))
+
     def _draw_selected_hands(self, target):
         _, _, hands = self._large_surfaces[
             self.selected_index
@@ -503,6 +557,7 @@ class CharacterScene:
                         self.elapsed * 2.2
                     ) * ui(2)
                 )
+                + self._bounce_offset()
             )
 
             target.blit(
@@ -613,51 +668,100 @@ class CharacterScene:
             panel.topleft,
         )
 
-        # Character name.
-        name_surf = self.name_font.render(
-            character["name"].upper(),
-            True,
-            NAME_TEXT_COLOR,
-        )
+        if self.confirmed:
+            # Decorated confirmation inside the original dialogue card.
+            name = character["name"].upper()
+            label_y = panel.y + ui(32)
+            name_y = panel.y + ui(77)
+            decoration_y = panel.y + ui(115)
 
-        target.blit(
-            name_surf,
-            (
-                panel.x + ui(28),
-                panel.y + ui(14),
-            ),
-        )
+            label = "YOUR CHEF IS READY!"
+            draw_text_center(
+                target, label, self.label_font,
+                NAME_TEXT_COLOR, (panel.centerx, label_y),
+            )
 
-        # Dashed divider.
-        line_y = panel.y + ui(64)
-        dash_width = ui(8)
-        dash_gap = ui(5)
-        current_x = panel.x + ui(30)
+            # Small warm-colored sparkles on either side of the label.
+            label_width = self.label_font.size(label)[0]
+            for direction in (-1, 1):
+                sparkle_x = panel.centerx + direction * (label_width // 2 + ui(25))
+                sparkle_y = label_y
+                sparkle_color = (183, 119, 73)
+                pygame.draw.line(
+                    target, sparkle_color,
+                    (sparkle_x - ui(5), sparkle_y),
+                    (sparkle_x + ui(5), sparkle_y), ui(2),
+                )
+                pygame.draw.line(
+                    target, sparkle_color,
+                    (sparkle_x, sparkle_y - ui(5)),
+                    (sparkle_x, sparkle_y + ui(5)), ui(2),
+                )
 
-        while current_x < panel.right - ui(30):
+            # Brief pop-in when the player confirms.
+            pop_scale = 1.0
+            if self.confirm_animation > 0:
+                progress = 1 - self.confirm_animation / CONFIRM_BOUNCE_TIME
+                pop_scale += 0.08 * math.sin(math.pi * progress)
+
+            name_surface = self.name_font.render(
+                f"CHEF {name}!", True, TITLE_TEXT_COLOR
+            )
+            if pop_scale != 1.0:
+                name_surface = pygame.transform.smoothscale(
+                    name_surface,
+                    (round(name_surface.get_width() * pop_scale),
+                     round(name_surface.get_height() * pop_scale)),
+                )
+            target.blit(
+                name_surface,
+                name_surface.get_rect(center=(panel.centerx, name_y)),
+            )
+
+            # Decorative rules and a simple chef-hat symbol.
             pygame.draw.line(
-                target,
-                border_color,
-                (current_x, line_y),
-                (
-                    min(
-                        current_x + dash_width,
-                        panel.right - ui(30),
-                    ),
-                    line_y,
-                ),
-                ui(2),
+                target, (213, 161, 123),
+                (panel.centerx - ui(115), decoration_y),
+                (panel.centerx - ui(23), decoration_y), ui(2),
+            )
+            pygame.draw.line(
+                target, (213, 161, 123),
+                (panel.centerx + ui(23), decoration_y),
+                (panel.centerx + ui(115), decoration_y), ui(2),
+            )
+            hat_color = TITLE_TEXT_COLOR
+            hat_x, hat_y = panel.centerx, decoration_y
+            pygame.draw.circle(target, hat_color, (hat_x - ui(8), hat_y - ui(4)), ui(6), ui(2))
+            pygame.draw.circle(target, hat_color, (hat_x, hat_y - ui(8)), ui(8), ui(2))
+            pygame.draw.circle(target, hat_color, (hat_x + ui(8), hat_y - ui(4)), ui(6), ui(2))
+            pygame.draw.line(target, hat_color,
+                             (hat_x - ui(13), hat_y + ui(4)),
+                             (hat_x + ui(13), hat_y + ui(4)), ui(2))
+        else:
+            # Original character name, divider, and description.
+            name_surface = self.name_font.render(
+                character["name"].upper(), True, NAME_TEXT_COLOR
+            )
+            target.blit(
+                name_surface,
+                (panel.x + ui(28), panel.y + ui(14)),
             )
 
-            current_x += (
-                dash_width + dash_gap
-            )
+            line_y = panel.y + ui(64)
+            current_x = panel.x + ui(30)
+            while current_x < panel.right - ui(30):
+                pygame.draw.line(
+                    target,
+                    border_color,
+                    (current_x, line_y),
+                    (min(current_x + ui(8), panel.right - ui(30)), line_y),
+                    ui(2),
+                )
+                current_x += ui(13)
 
-        self._draw_wrapped_description(
-            target,
-            character["description"],
-            panel,
-        )
+            self._draw_wrapped_description(
+                target, character["description"], panel
+            )
 
     def _draw_wrapped_description(
         self, target, text, panel
